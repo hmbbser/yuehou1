@@ -85,6 +85,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dailyQuote, setDailyQuote] = useState(() => getFallbackQuote());
+  const [showPassword, setShowPassword] = useState(false);
   const secretRef = useRef<HTMLTextAreaElement>(null);
 
   const expiresIn = useMemo(() => {
@@ -280,18 +281,41 @@ export default function HomePage() {
 
         <label className="field">
           <span>访问密码</span>
-          <input
-            autoCapitalize="none"
-            autoComplete="off"
-            autoCorrect="off"
-            className="masked-input"
-            name="burn-key"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="可留空；重要内容建议设置"
-            spellCheck={false}
-            type="text"
-            value={password}
-          />
+          <span className="password-field">
+            <input
+              autoCapitalize="none"
+              autoComplete="off"
+              autoCorrect="off"
+              className={showPassword ? "" : "masked-input"}
+              name="burn-key"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="可留空；重要内容建议设置"
+              spellCheck={false}
+              type="text"
+              value={password}
+            />
+            <button
+              aria-label={showPassword ? "隐藏密码" : "显示密码"}
+              className="password-eye"
+              onClick={() => setShowPassword((value) => !value)}
+              title={showPassword ? "隐藏密码" : "显示密码"}
+              type="button"
+            >
+              {showPassword ? (
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 3l18 18" />
+                  <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                  <path d="M9.9 5.1A9.8 9.8 0 0 1 12 5c5 0 8.7 4.4 10 7a15.8 15.8 0 0 1-2.2 3.2" />
+                  <path d="M6.6 6.6C4.4 8 2.8 10.1 2 12c1.3 2.6 5 7 10 7a9.7 9.7 0 0 0 4.3-1" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.7-7 10-7 10 7 10 7-3.7 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </span>
         </label>
 
         <div className="completion-meter" aria-label="填写进度">
