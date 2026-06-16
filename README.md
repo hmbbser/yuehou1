@@ -25,7 +25,8 @@ https://your-domain.com/ve22
 - 支持明暗模式记忆
 - 支持每日一言占位文案
 - 适配手机、iPad、电脑
-- 使用 Vercel Serverless API + Vercel KV / Upstash Redis
+- 支持 Vercel Serverless + Vercel KV / Upstash Redis
+- 支持自有服务器 Docker 部署，本机 Redis 保存数据
 
 ## 怎么使用
 
@@ -97,31 +98,176 @@ UPSTASH_REDIS_REST_TOKEN=...
 
 部署成功后就可以使用了。
 
-## 本地开发
+## Debian / Ubuntu 服务器 Docker 部署
 
-安装依赖：
+下面适合把项目部署到自己的 Debian 或 Ubuntu 服务器，例如一台 VPS。  
+这套方式不需要 Upstash Redis REST Token，Redis 直接跑在服务器本机 Docker 里。
 
-```bash
-pnpm install
-```
+### 1. 安装 Docker
 
-创建 `.env.local`：
-
-```bash
-UPSTASH_REDIS_REST_URL=...
-UPSTASH_REDIS_REST_TOKEN=...
-```
-
-启动开发服务：
+如果服务器还没有 Docker，可以先安装：
 
 ```bash
-pnpm dev
+sudo apt update
+sudo apt install -y ca-certificates curl git nginx
+
+sudo install -m 0755 -d /etc/apt/keyrings
+. /etc/os-release
+curl -fsSL "https://download.docker.com/linux/${ID}/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${ID} \
+  ${VERSION_CODENAME} stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-打开：
+检查 Docker 是否正常：
+
+```bash
+sudo docker version
+sudo docker compose version
+```
+
+### 2. 下载项目
+
+```bash
+cd /opt
+sudo git clone https://github.com/hmbbser/yuehou.git
+sudo chown -R $USER:$USER /opt/yuehou
+cd /opt/yuehou
+```
+
+如果你是自己 fork 的仓库，把地址换成自己的 GitHub 仓库地址。
+
+### 3. 启动应用和 Redis
+
+项目已经带有 `Dockerfile` 和 `docker-compose.yml`。默认会启动两个容器：
+
+- `yuehou`：Next.js 应用，监听本机 `127.0.0.1:3000`
+- `yuehou-redis`：Redis 7，数据保存到 Docker volume
+
+直接构建并启动：
+
+```bash
+sudo docker compose up -d --build
+```
+
+查看状态和日志：
+
+```bash
+sudo docker compose ps
+sudo docker compose logs -f yuehou
+```
+
+默认配置里，应用通过下面这个变量连接 Docker 内部的 Redis：
+
+```yaml
+REDIS_URL: redis://redis:6379
+```
+
+Redis 数据会保存在 `yuehou-redis-data` 这个 Docker volume 里。只要不删除这个 volume，容器重建后数据仍会保留。
+
+本机测试：
+
+```bash
+curl -I http://127.0.0.1:3000
+```
+
+### 4. 配置 Nginx 反向代理
+
+假设你的域名是 `example.com`，创建 Nginx 配置：
+
+```bash
+sudo nano /etc/nginx/sites-available/yuehou
+```
+
+写入：
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+启用配置：
+
+```bash
+sudo ln -s /etc/nginx/sites-available/yuehou /etc/nginx/sites-enabled/yuehou
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+现在可以先通过：
 
 ```text
-http://localhost:3000
+http://example.com
+```
+
+访问应用。
+
+### 5. 配置 HTTPS
+
+推荐用 Certbot 自动申请证书：
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d example.com
+```
+
+完成后打开：
+
+```text
+https://example.com
+```
+
+### 6. 更新部署
+
+以后更新代码：
+
+```bash
+cd /opt/yuehou
+sudo git pull
+sudo docker compose up -d --build
+```
+
+### 7. 常用维护命令
+
+查看日志：
+
+```bash
+sudo docker compose logs -f
+```
+
+重启应用：
+
+```bash
+sudo docker compose restart yuehou
+```
+
+停止服务但保留 Redis 数据：
+
+```bash
+sudo docker compose down
+```
+
+如果确认要连 Redis 数据一起删除，再执行：
+
+```bash
+sudo docker compose down -v
 ```
 
 ## 安全说明

@@ -1,12 +1,11 @@
-import { Redis } from "@upstash/redis";
-import { blacklistKey, missKey } from "./redis";
+import { blacklistKey, missKey, RedisClient } from "./redis";
 import { BLACKLIST_SECONDS, DEFAULT_MISS_WINDOW_SECONDS, MISS_THRESHOLD } from "./types";
 
-export async function isBlacklisted(redis: Redis, ipHash: string) {
+export async function isBlacklisted(redis: RedisClient, ipHash: string) {
   return Boolean(await redis.get(blacklistKey(ipHash)));
 }
 
-export async function registerSuspiciousMiss(redis: Redis, ipHash: string) {
+export async function registerSuspiciousMiss(redis: RedisClient, ipHash: string) {
   const key = missKey(ipHash);
   const misses = await redis.incr(key);
 

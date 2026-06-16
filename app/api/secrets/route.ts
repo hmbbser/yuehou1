@@ -51,7 +51,7 @@ function getCreateErrorMessage(error: unknown) {
   }
 
   if (message.includes("Redis") || message.includes("environment")) {
-    return "Redis 环境变量未配置或不可用。请检查 UPSTASH_REDIS_REST_URL 和 UPSTASH_REDIS_REST_TOKEN。";
+    return "Redis 环境变量未配置或不可用。Vercel 请检查 UPSTASH_REDIS_REST_URL / TOKEN，自建 Docker 请检查 REDIS_URL。";
   }
 
   return "创建失败，请稍后重试。";

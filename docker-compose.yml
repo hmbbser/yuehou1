@@ -1,0 +1,29 @@
+services:
+  yuehou:
+    build: .
+    container_name: yuehou
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: yuehou-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - yuehou-redis-data:/data
+
+volumes:
+  yuehou-redis-data:

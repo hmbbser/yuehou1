@@ -52,7 +52,7 @@ export default async function CodePage({ params }: PageProps) {
     return (
       <Shell>
         <Hero />
-        <StatePanel title="存储未配置" description="请在 Vercel 绑定 KV 或填写 Upstash Redis 环境变量。" />
+        <StatePanel title="存储未配置" description="Vercel 请绑定 KV / Upstash，自建 Docker 请配置 REDIS_URL。" />
       </Shell>
     );
   }
