@@ -1,4 +1,4 @@
-export const CODE_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+export const CODE_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 export const CODE_LENGTH = 4;
 export const CODE_PATTERN = /^[0-9a-zA-Z]{4}$/;
 export const DEFAULT_MISS_WINDOW_SECONDS = 60;
