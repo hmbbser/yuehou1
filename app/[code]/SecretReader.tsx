@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { decryptWithPassword, derivePasswordProof } from "@/lib/client-crypto";
 import { EncryptedPayload, PublicSecretMeta } from "@/lib/types";
 
@@ -19,6 +19,16 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   const [destroyed, setDestroyed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const secretTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const textarea = secretTextareaRef.current;
+
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [secret]);
 
   async function consume(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -73,7 +83,10 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   }
 
   return (
-    <form className={destroyed ? "oauth-panel reader-panel reader-panel--revealed" : "oauth-panel reader-panel"} onSubmit={consume}>
+    <form
+      className={destroyed ? "oauth-panel reader-panel reader-panel--revealed" : "oauth-panel reader-panel"}
+      onSubmit={consume}
+    >
       {!destroyed ? (
         <div className="identity-card reader-intro">
           <div className="avatar">阅</div>
@@ -127,8 +140,17 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
 
       {secret ? (
         <div className="secret-output">
-          <span className="section-title">秘密内容</span>
-          <pre>{secret}</pre>
+          <label className="field">
+            <span>秘密内容</span>
+            <textarea
+              autoComplete="off"
+              className="secret-output-textarea"
+              onChange={(event) => setSecret(event.target.value)}
+              ref={secretTextareaRef}
+              spellCheck={false}
+              value={secret}
+            />
+          </label>
           <button className="icon-button" onClick={copySecret} type="button">
             {copied ? "已复制" : "复制内容"}
           </button>
