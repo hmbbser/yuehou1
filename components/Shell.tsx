@@ -1,7 +1,4 @@
-import Link from "next/link";
 import { ReactNode } from "react";
-import { siteName } from "@/lib/site";
-import { LogoMark } from "./LogoMark";
 import { SettingsPanel } from "./SettingsPanel";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -9,10 +6,6 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="page-shell">
       <nav className="nav-bar">
-        <Link className="nav-brand" href="/">
-          <LogoMark />
-          <span>{siteName}</span>
-        </Link>
         <div className="nav-actions">
           <SettingsPanel />
           <ThemeToggle />

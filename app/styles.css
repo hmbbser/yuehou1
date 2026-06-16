@@ -142,17 +142,19 @@ textarea {
 }
 
 .nav-bar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  left: 0;
+  right: 0;
+  z-index: 70;
   display: flex;
   min-height: 52px;
   align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  justify-content: flex-end;
+  border-bottom: 0;
+  background: transparent;
   padding: 0 clamp(18px, 8vw, 13.5rem);
-  backdrop-filter: blur(18px);
+  pointer-events: none;
 }
 
 .nav-brand,
@@ -164,6 +166,10 @@ textarea {
 
 .nav-brand {
   font-weight: 800;
+}
+
+.nav-actions {
+  pointer-events: auto;
 }
 
 .main-stage {

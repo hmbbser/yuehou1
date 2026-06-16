@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { LogoMark } from "@/components/LogoMark";
 import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
 import { Shell } from "@/components/Shell";
@@ -277,21 +278,6 @@ export default function HomePage() {
 
     return () => window.removeEventListener(settingsChangeEvent, syncSettings);
   }, []);
-
-  useEffect(() => {
-    if (!previewPhoto) return;
-
-    const htmlOverflow = document.documentElement.style.overflow;
-    const bodyOverflow = document.body.style.overflow;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.documentElement.style.overflow = htmlOverflow;
-      document.body.style.overflow = bodyOverflow;
-    };
-  }, [previewPhoto]);
 
   function insertNewLine() {
     const textarea = secretRef.current;
@@ -638,23 +624,11 @@ export default function HomePage() {
         )}
       </form>
       {previewPhoto ? (
-        <div className="image-lightbox" onClick={() => setPreviewPhoto(null)} role="presentation">
-          <button
-            aria-label="关闭预览"
-            className="image-lightbox__close"
-            onClick={() => setPreviewPhoto(null)}
-            type="button"
-          >
-            ×
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt={previewPhoto.name || "图片预览"}
-            className="image-lightbox__image"
-            onClick={(event) => event.stopPropagation()}
-            src={previewPhoto.dataUrl}
-          />
-        </div>
+        <ImageLightbox
+          alt={previewPhoto.name || "图片预览"}
+          onClose={() => setPreviewPhoto(null)}
+          src={previewPhoto.dataUrl}
+        />
       ) : null}
     </Shell>
   );

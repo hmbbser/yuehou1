@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { decryptWithPassword, derivePasswordProof } from "@/lib/client-crypto";
 import { SecretContent, unpackSecretContent } from "@/lib/secret-content";
 import { siteName } from "@/lib/site";
@@ -32,21 +33,6 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [secret.text]);
-
-  useEffect(() => {
-    if (!previewImage) return;
-
-    const htmlOverflow = document.documentElement.style.overflow;
-    const bodyOverflow = document.body.style.overflow;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.documentElement.style.overflow = htmlOverflow;
-      document.body.style.overflow = bodyOverflow;
-    };
-  }, [previewImage]);
 
   async function consume(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -214,23 +200,11 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
         </div>
       )}
       {previewImage ? (
-        <div className="image-lightbox" onClick={() => setPreviewImage(null)} role="presentation">
-          <button
-            aria-label="关闭预览"
-            className="image-lightbox__close"
-            onClick={() => setPreviewImage(null)}
-            type="button"
-          >
-            ×
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt={previewImage.name || "图片预览"}
-            className="image-lightbox__image"
-            onClick={(event) => event.stopPropagation()}
-            src={previewImage.dataUrl}
-          />
-        </div>
+        <ImageLightbox
+          alt={previewImage.name || "图片预览"}
+          onClose={() => setPreviewImage(null)}
+          src={previewImage.dataUrl}
+        />
       ) : null}
     </form>
   );
