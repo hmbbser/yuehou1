@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { decryptWithPassword, derivePasswordProof } from "@/lib/client-crypto";
+import { SecretContent, unpackSecretContent } from "@/lib/secret-content";
 import { siteName } from "@/lib/site";
 import { EncryptedPayload, PublicSecretMeta } from "@/lib/types";
 
@@ -14,7 +15,8 @@ type ConsumeResponse =
 
 export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   const [password, setPassword] = useState("");
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState<SecretContent>({ images: [], text: "" });
+  const [previewImage, setPreviewImage] = useState<SecretContent["images"][number] | null>(null);
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [destroyed, setDestroyed] = useState(false);
@@ -29,7 +31,22 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
 
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [secret]);
+  }, [secret.text]);
+
+  useEffect(() => {
+    if (!previewImage) return;
+
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+    };
+  }, [previewImage]);
 
   async function consume(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -67,7 +84,7 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
         text = "内容已销毁，但本机解密失败。请确认密码是否完整，或浏览器是否支持 Web Crypto。";
       }
 
-      setSecret(text);
+      setSecret(unpackSecretContent(text));
       setDestroyed(true);
       setStatus("");
     } catch (error) {
@@ -78,7 +95,7 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   }
 
   async function copySecret() {
-    await navigator.clipboard.writeText(secret);
+    await navigator.clipboard.writeText(secret.text);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
@@ -139,22 +156,42 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
         </label>
       ) : null}
 
-      {secret ? (
+      {secret.text || secret.images.length > 0 ? (
         <div className="secret-output">
-          <label className="field">
-            <span>秘密内容</span>
-            <textarea
-              autoComplete="off"
-              className="secret-output-textarea"
-              onChange={(event) => setSecret(event.target.value)}
-              ref={secretTextareaRef}
-              spellCheck={false}
-              value={secret}
-            />
-          </label>
-          <button className="icon-button" onClick={copySecret} type="button">
-            {copied ? "已复制" : "复制内容"}
-          </button>
+          {secret.images.length > 0 ? (
+            <div className="secret-image-grid">
+              {secret.images.map((image, index) => (
+                <button
+                  aria-label="预览图片"
+                  className="secret-image-button"
+                  key={`${image.name}-${image.size}-${index}`}
+                  onClick={() => setPreviewImage(image)}
+                  type="button"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt="阅后即焚图片" className="secret-output-image" src={image.dataUrl} />
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {secret.text ? (
+            <>
+              <label className="field">
+                <span>秘密内容</span>
+                <textarea
+                  autoComplete="off"
+                  className="secret-output-textarea"
+                  onChange={(event) => setSecret((value) => ({ ...value, text: event.target.value }))}
+                  ref={secretTextareaRef}
+                  spellCheck={false}
+                  value={secret.text}
+                />
+              </label>
+              <button className="icon-button" onClick={copySecret} type="button">
+                {copied ? "已复制" : "复制内容"}
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -176,6 +213,25 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
           </a>
         </div>
       )}
+      {previewImage ? (
+        <div className="image-lightbox" onClick={() => setPreviewImage(null)} role="presentation">
+          <button
+            aria-label="关闭预览"
+            className="image-lightbox__close"
+            onClick={() => setPreviewImage(null)}
+            type="button"
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt={previewImage.name || "图片预览"}
+            className="image-lightbox__image"
+            onClick={(event) => event.stopPropagation()}
+            src={previewImage.dataUrl}
+          />
+        </div>
+      ) : null}
     </form>
   );
 }

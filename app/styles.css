@@ -123,7 +123,7 @@ textarea {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
 }
 
 .page-shell:has(.reader-panel) {
@@ -173,7 +173,7 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  min-height: 0;
+  min-height: auto;
   overflow: visible;
   padding: clamp(24px, 5dvh, 48px) 14px 18px;
   transform: scale(var(--page-scale));
@@ -710,6 +710,120 @@ textarea {
   box-shadow: 0 0 0 4px var(--focus);
 }
 
+.photo-field {
+  display: grid;
+  gap: 10px;
+}
+
+.photo-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.photo-list {
+  display: grid;
+  gap: 8px;
+}
+
+.photo-upload-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-solid) 72%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 900;
+  transition:
+    border-color 170ms ease,
+    background 170ms ease,
+    transform 170ms ease;
+}
+
+.photo-upload-button:hover {
+  border-color: var(--text);
+  background: var(--panel-solid);
+  transform: translateY(-1px);
+}
+
+.photo-upload-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.photo-upload-button--disabled {
+  cursor: wait;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.photo-preview {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-solid);
+  padding: 8px;
+}
+
+.photo-thumb-button {
+  display: block;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: zoom-in;
+  padding: 0;
+}
+
+.photo-thumb-button img {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.photo-thumb-button:hover img {
+  transform: scale(1.05);
+}
+
+.photo-preview div {
+  min-width: 0;
+}
+
+.photo-preview strong,
+.photo-preview span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-preview strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.photo-preview span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .expiry-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -861,6 +975,87 @@ textarea {
   max-height: none;
   resize: vertical;
   overflow: hidden;
+}
+
+.secret-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.secret-image-button {
+  display: block;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  cursor: zoom-in;
+  padding: 0;
+}
+
+.secret-output-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.secret-image-button:hover .secret-output-image {
+  transform: scale(1.03);
+}
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+  padding: 18px;
+}
+
+.image-lightbox__image {
+  display: block;
+  max-width: min(calc(100vw - 36px), 1200px);
+  max-height: calc(100dvh - 36px);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  object-fit: contain;
+}
+
+.image-lightbox__close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 121;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.48);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 26px;
+  line-height: 1;
+  padding: 0 0 3px;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.image-lightbox__close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(1.04);
 }
 
 .reader-panel--revealed .secret-output {
@@ -1057,6 +1252,20 @@ textarea {
 
   .result-box {
     grid-template-columns: 1fr;
+  }
+
+  .photo-preview {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .photo-thumb-button,
+  .photo-thumb-button img {
+    width: 52px;
+    height: 52px;
+  }
+
+  .photo-preview .icon-button {
+    grid-column: 1 / -1;
   }
 }
 

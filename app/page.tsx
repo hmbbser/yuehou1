@@ -5,6 +5,7 @@ import { LogoMark } from "@/components/LogoMark";
 import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
 import { Shell } from "@/components/Shell";
 import { encryptWithPassword } from "@/lib/client-crypto";
+import { packSecretContent, SecretImage } from "@/lib/secret-content";
 import { siteName } from "@/lib/site";
 
 type ExpiryValue = "300" | "custom" | "never";
@@ -19,6 +20,11 @@ const expiryOptions: Array<{ label: string; value: ExpiryValue; hint: string }> 
   { label: "自定义", value: "custom", hint: "按分钟" },
   { label: "无限期", value: "never", hint: "待读取" },
 ];
+const maxOriginalImageBytes = 8 * 1024 * 1024;
+const maxStoredImageBytes = 700 * 1024;
+const maxStoredImagesBytes = 2.6 * 1024 * 1024;
+const maxPhotoCount = 6;
+const maxImageSide = 1280;
 
 const fallbackQuotes = [
   { text: "黑色世界唯有东方的曙光。", author: "佚名" },
@@ -84,6 +90,92 @@ function rememberQuote(quote: string) {
   localStorage.setItem("recent-quotes", JSON.stringify(nextRecent));
 }
 
+function readFileAsDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+async function imageBlobFromCanvas(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("图片压缩失败。"));
+        }
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+async function prepareImage(file: File): Promise<SecretImage> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("请选择图片文件。");
+  }
+
+  if (file.size > maxOriginalImageBytes) {
+    throw new Error("图片太大，请选择 8 MB 以内的图片。");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await loadImage(sourceUrl);
+    const scale = Math.min(1, maxImageSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("当前浏览器不支持图片压缩。");
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(image, 0, 0, width, height);
+
+    let blob = await imageBlobFromCanvas(canvas, 0.82);
+
+    if (blob.size > maxStoredImageBytes) {
+      blob = await imageBlobFromCanvas(canvas, 0.68);
+    }
+
+    if (blob.size > maxStoredImageBytes) {
+      throw new Error("图片压缩后仍然太大，请换一张更小的图片。");
+    }
+
+    return {
+      dataUrl: await readFileAsDataUrl(blob),
+      height,
+      name: file.name,
+      size: blob.size,
+      type: "image/jpeg",
+      width,
+    };
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 export default function HomePage() {
   const [secret, setSecret] = useState("");
   const [password, setPassword] = useState("");
@@ -95,10 +187,14 @@ export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const [showAutoCopyToast, setShowAutoCopyToast] = useState(false);
   const [dailyQuote, setDailyQuote] = useState("");
+  const [photos, setPhotos] = useState<SecretImage[]>([]);
+  const [previewPhoto, setPreviewPhoto] = useState<SecretImage | null>(null);
+  const [isPreparingPhoto, setIsPreparingPhoto] = useState(false);
   const [quoteSource, setQuoteSource] = useState<QuoteSource>(() => readSettings().quoteSource);
   const [settingsReady, setSettingsReady] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const secretRef = useRef<HTMLTextAreaElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const loadedQuoteSourceRef = useRef<QuoteSource | null>(null);
 
   const expiresIn = useMemo(() => {
@@ -110,9 +206,10 @@ export default function HomePage() {
     return Number(expiry);
   }, [customMinutes, expiry]);
   const completion = {
-    content: secret.trim().length > 0,
+    content: secret.trim().length > 0 || photos.length > 0,
     password: password.trim().length > 0,
   };
+  const storedPhotosSize = photos.reduce((total, photo) => total + photo.size, 0);
 
   useEffect(() => {
     const focusSecret = () => secretRef.current?.focus({ preventScroll: true });
@@ -181,6 +278,21 @@ export default function HomePage() {
     return () => window.removeEventListener(settingsChangeEvent, syncSettings);
   }, []);
 
+  useEffect(() => {
+    if (!previewPhoto) return;
+
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+    };
+  }, [previewPhoto]);
+
   function insertNewLine() {
     const textarea = secretRef.current;
 
@@ -203,8 +315,8 @@ export default function HomePage() {
     setStatus("");
     setCopied(false);
 
-    if (!secret.trim()) {
-      setStatus("先写一点要焚毁的内容。");
+    if (!secret.trim() && photos.length === 0) {
+      setStatus("先写一点要焚毁的内容，或上传一张图片。");
       return;
     }
 
@@ -216,17 +328,21 @@ export default function HomePage() {
     setIsLoading(true);
 
     try {
+      const content = packSecretContent({
+        images: photos,
+        text: secret,
+      });
       const body =
         password.trim().length > 0
           ? {
               mode: "password",
               expiresIn,
-              ...(await encryptWithPassword(secret, password)),
+              ...(await encryptWithPassword(content, password)),
             }
           : {
               mode: "plain",
               expiresIn,
-              secret,
+              secret: content,
             };
 
       const response = await fetch("/api/secrets", {
@@ -258,6 +374,44 @@ export default function HomePage() {
     }
   }
 
+  async function handlePhotoChange(fileList: FileList | null | undefined) {
+    const files = Array.from(fileList ?? []);
+
+    if (files.length === 0) return;
+
+    setStatus("");
+    setIsPreparingPhoto(true);
+
+    try {
+      if (photos.length + files.length > maxPhotoCount) {
+        throw new Error(`最多上传 ${maxPhotoCount} 张图片。`);
+      }
+
+      const nextPhotos = [...photos];
+      let nextSize = storedPhotosSize;
+
+      for (const file of files) {
+        const nextPhoto = await prepareImage(file);
+
+        if (nextSize + nextPhoto.size > maxStoredImagesBytes) {
+          throw new Error("图片总大小太大，请移除几张或换更小的图片。");
+        }
+
+        nextPhotos.push(nextPhoto);
+        nextSize += nextPhoto.size;
+      }
+
+      setPhotos(nextPhotos);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "图片处理失败，请换一张试试。");
+    } finally {
+      setIsPreparingPhoto(false);
+      if (photoInputRef.current) {
+        photoInputRef.current.value = "";
+      }
+    }
+  }
+
   async function copyResult() {
     if (!resultUrl) return;
 
@@ -269,6 +423,8 @@ export default function HomePage() {
   function resetCreateForm() {
     setSecret("");
     setPassword("");
+    setPhotos([]);
+    setPreviewPhoto(null);
     setResultUrl("");
     setStatus("");
     setCopied(false);
@@ -327,6 +483,56 @@ export default function HomePage() {
                 value={secret}
               />
             </label>
+
+        <div className="photo-field">
+          {photos.length > 0 ? (
+            <div className="photo-list">
+              {photos.map((photo, index) => (
+                <div className="photo-preview" key={`${photo.name}-${photo.size}-${index}`}>
+                  <button
+                    aria-label="预览图片"
+                    className="photo-thumb-button"
+                    onClick={() => setPreviewPhoto(photo)}
+                    type="button"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img alt="已上传的阅后即焚图片" src={photo.dataUrl} />
+                  </button>
+                  <div>
+                    <strong>{photo.name || "已上传图片"}</strong>
+                    <span>{Math.ceil(photo.size / 1024)} KB</span>
+                  </div>
+                  <button
+                    className="icon-button"
+                    onClick={() => setPhotos((value) => value.filter((_, itemIndex) => itemIndex !== index))}
+                    type="button"
+                  >
+                    移除
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {photos.length < maxPhotoCount ? (
+            <label
+              className={
+                isPreparingPhoto ? "photo-upload-button photo-upload-button--disabled" : "photo-upload-button"
+              }
+            >
+              {isPreparingPhoto ? "处理图片中..." : photos.length > 0 ? "继续上传图片" : "上传图片"}
+              <input
+                accept="image/*"
+                className="photo-input"
+                disabled={isPreparingPhoto}
+                multiple
+                onChange={(event) => void handlePhotoChange(event.target.files)}
+                ref={photoInputRef}
+                type="file"
+              />
+            </label>
+          ) : null}
+        </div>
 
         <div className="section-title">销毁时间</div>
         <div className="expiry-grid">
@@ -416,6 +622,8 @@ export default function HomePage() {
             onClick={() => {
               setSecret("");
               setPassword("");
+              setPhotos([]);
+              setPreviewPhoto(null);
               setResultUrl("");
               setStatus("");
               setCopied(false);
@@ -429,6 +637,25 @@ export default function HomePage() {
           </>
         )}
       </form>
+      {previewPhoto ? (
+        <div className="image-lightbox" onClick={() => setPreviewPhoto(null)} role="presentation">
+          <button
+            aria-label="关闭预览"
+            className="image-lightbox__close"
+            onClick={() => setPreviewPhoto(null)}
+            type="button"
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt={previewPhoto.name || "图片预览"}
+            className="image-lightbox__image"
+            onClick={(event) => event.stopPropagation()}
+            src={previewPhoto.dataUrl}
+          />
+        </div>
+      ) : null}
     </Shell>
   );
 }
