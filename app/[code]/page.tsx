@@ -51,7 +51,7 @@ export default async function CodePage({ params }: PageProps) {
   } catch {
     return (
       <Shell>
-        <Hero code={params.code} />
+        <Hero />
         <StatePanel title="存储未配置" description="请在 Vercel 绑定 KV 或填写 Upstash Redis 环境变量。" />
       </Shell>
     );
@@ -60,7 +60,7 @@ export default async function CodePage({ params }: PageProps) {
   if (await isBlacklisted(redis, ipHash)) {
     return (
       <Shell>
-        <Hero code={params.code} />
+        <Hero />
         <StatePanel title="访问过于频繁" description="该网络触发了撞码防护，请 24 小时后再试。" />
       </Shell>
     );
@@ -73,7 +73,7 @@ export default async function CodePage({ params }: PageProps) {
 
     return (
       <Shell>
-        <Hero code={params.code} />
+        <Hero />
         <StatePanel title="秘密不可用" description="链接不存在、已过期，或已经被读取销毁。" />
       </Shell>
     );
@@ -100,13 +100,13 @@ export default async function CodePage({ params }: PageProps) {
 
   return (
     <Shell>
-      <Hero code={params.code} />
+      <Hero />
       <SecretReader meta={meta} />
     </Shell>
   );
 }
 
-function Hero({ code }: { code: string }) {
+function Hero() {
   return (
     <section className="hero">
       <div className="hero-icon">
@@ -117,7 +117,7 @@ function Hero({ code }: { code: string }) {
           </svg>
         </span>
       </div>
-      <h1>/{code}</h1>
+      <h1>阅后即焚</h1>
     </section>
   );
 }

@@ -58,7 +58,7 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
 
       setSecret(text);
       setDestroyed(true);
-      setStatus("内容已读取并销毁。刷新或再次打开将无法恢复。");
+      setStatus("");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "读取失败，请稍后再试。");
     } finally {
@@ -73,29 +73,16 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   }
 
   return (
-    <form className="oauth-panel reader-panel" onSubmit={consume}>
-      <div className="identity-card">
-        <div className="avatar">阅</div>
-        <div>
-          <strong>{destroyed ? "秘密已焚毁" : "准备读取秘密"}</strong>
-          <span>{meta.mode === "password" ? "需要密码，正确读取后销毁" : "点击读取后立即销毁"}</span>
+    <form className={destroyed ? "oauth-panel reader-panel reader-panel--revealed" : "oauth-panel reader-panel"} onSubmit={consume}>
+      {!destroyed ? (
+        <div className="identity-card reader-intro">
+          <div className="avatar">阅</div>
+          <div>
+            <strong>准备读取秘密</strong>
+            <span>{meta.mode === "password" ? "需要密码，正确读取后销毁" : "点击读取后立即销毁"}</span>
+          </div>
         </div>
-      </div>
-
-      <div className="info-card">
-        <div className="info-line">
-          <span>短码</span>
-          <strong>/{meta.code}</strong>
-        </div>
-        <div className="info-line">
-          <span>保护方式</span>
-          <strong>{meta.mode === "password" ? "密码保护" : "极速短链"}</strong>
-        </div>
-        <div className="info-line">
-          <span>有效期</span>
-          <strong>{meta.expiresAt ? new Date(meta.expiresAt).toLocaleString("zh-CN") : "无限期，直到读取"}</strong>
-        </div>
-      </div>
+      ) : null}
 
       {meta.mode === "password" && !destroyed ? (
         <label className="field">
@@ -140,6 +127,7 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
 
       {secret ? (
         <div className="secret-output">
+          <span className="section-title">秘密内容</span>
           <pre>{secret}</pre>
           <button className="icon-button" onClick={copySecret} type="button">
             {copied ? "已复制" : "复制内容"}
@@ -155,13 +143,13 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
             {isLoading ? "读取中..." : "读取并销毁"}
           </button>
           <a className="btn-pill btn-pill-secondary" href="/">
-            创建新的秘密
+            创建新阅后即焚
           </a>
         </div>
       ) : (
         <div className="action-stack">
           <a className="btn-pill btn-pill-primary" href="/">
-            创建新的秘密
+            创建新阅后即焚
           </a>
         </div>
       )}

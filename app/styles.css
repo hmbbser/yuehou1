@@ -130,6 +130,24 @@ textarea {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+.page-shell:has(.reader-panel) {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.page-shell:has(.reader-panel) .main-stage {
+  width: 100%;
+  min-height: auto;
+  transform: none;
+}
+
+.page-shell:has(.reader-panel) .footer {
+  position: static;
+}
+
 .nav-bar {
   position: sticky;
   top: 0;
@@ -468,6 +486,54 @@ textarea {
   gap: 14px;
 }
 
+.create-panel--result {
+  animation: result-rise 320ms ease both;
+}
+
+.created-state {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: clamp(16px, 3vw, 28px) 0;
+  text-align: center;
+}
+
+.created-state h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.created-badge {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 0 14px;
+}
+
+.toast-notice {
+  position: fixed;
+  top: 64px;
+  right: clamp(14px, 5vw, 48px);
+  z-index: 80;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 10px 14px;
+  animation: toast-fade 2200ms ease both;
+  backdrop-filter: blur(18px);
+}
+
 .identity-card {
   display: flex;
   align-items: center;
@@ -695,7 +761,7 @@ textarea {
 
 .completion-meter {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 7px;
   margin-top: -3px;
 }
@@ -778,6 +844,12 @@ textarea {
   align-items: center;
 }
 
+.result-box--large {
+  width: 100%;
+  min-height: 64px;
+  text-align: left;
+}
+
 .result-box code {
   min-width: 0;
   color: var(--text);
@@ -796,6 +868,19 @@ textarea {
     "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 14px;
   line-height: 1.7;
+}
+
+.reader-panel--revealed {
+  width: min(92vw, 760px);
+}
+
+.reader-panel--revealed .secret-output pre {
+  max-height: none;
+  overflow: visible;
+}
+
+.reader-intro {
+  min-height: 70px;
 }
 
 .icon-button {
@@ -867,6 +952,36 @@ textarea {
 .state-panel {
   display: grid;
   gap: 18px;
+}
+
+@keyframes result-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  12%,
+  78% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 
 @media (max-width: 760px) {

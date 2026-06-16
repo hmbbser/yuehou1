@@ -73,7 +73,13 @@ export async function consumeSecret(code: string, proofHash?: string) {
     return { status: "wrong_password" as const };
   }
 
-  const record = JSON.parse(result[1] ?? "{}") as SecretRecord;
+  const rawRecord = result[1];
+
+  if (!rawRecord) {
+    return { status: "missing" as const };
+  }
+
+  const record = typeof rawRecord === "string" ? (JSON.parse(rawRecord) as SecretRecord) : (rawRecord as SecretRecord);
 
   if (record.expiresAt && record.expiresAt <= Date.now()) {
     return { status: "missing" as const };

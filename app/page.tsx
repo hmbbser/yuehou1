@@ -40,39 +40,11 @@ const fallbackQuotes = [
   { text: "万物皆有裂痕，那是光进来的地方。", author: "莱昂纳德·科恩" },
 ];
 
-const dailyQuoteStorageKey = "daily-quote";
-
 function formatQuote(text: string, author?: string | null) {
   const cleanText = text.trim();
   const cleanAuthor = author?.trim();
 
   return cleanAuthor ? `「${cleanText}」 —— ${cleanAuthor}` : `「${cleanText}」`;
-}
-
-function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getStoredDailyQuote() {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const stored = JSON.parse(localStorage.getItem(dailyQuoteStorageKey) || "null") as {
-      date?: string;
-      quote?: string;
-      source?: QuoteSource;
-    } | null;
-
-    return stored?.date === getTodayKey() && stored.source === readSettings().quoteSource && stored.quote
-      ? stored.quote
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeDailyQuote(quote: string, source: QuoteSource) {
-  localStorage.setItem(dailyQuoteStorageKey, JSON.stringify({ date: getTodayKey(), quote, source }));
 }
 
 function getFallbackQuote(rememberRecent = true) {
@@ -120,10 +92,13 @@ export default function HomePage() {
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [dailyQuote, setDailyQuote] = useState(() => getStoredDailyQuote() ?? getFallbackQuote(false));
+  const [showAutoCopyToast, setShowAutoCopyToast] = useState(false);
+  const [dailyQuote, setDailyQuote] = useState("");
   const [quoteSource, setQuoteSource] = useState<QuoteSource>(() => readSettings().quoteSource);
+  const [settingsReady, setSettingsReady] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const secretRef = useRef<HTMLTextAreaElement>(null);
+  const loadedQuoteSourceRef = useRef<QuoteSource | null>(null);
 
   const expiresIn = useMemo(() => {
     if (expiry === "never") return null;
@@ -135,7 +110,6 @@ export default function HomePage() {
   }, [customMinutes, expiry]);
   const completion = {
     content: secret.trim().length > 0,
-    time: expiry !== "custom" || (expiresIn ?? 0) > 0,
     password: password.trim().length > 0,
   };
 
@@ -153,23 +127,20 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!settingsReady) return;
+    if (loadedQuoteSourceRef.current === quoteSource) return;
+    loadedQuoteSourceRef.current = quoteSource;
+
     const controller = new AbortController();
-    const stored = getStoredDailyQuote();
-
-    if (stored) {
-      setDailyQuote(stored);
-      return () => controller.abort();
-    }
-
-    const fallback = dailyQuote;
-
-    setDailyQuote(fallback);
-    rememberQuote(fallback);
-    storeDailyQuote(fallback, quoteSource);
 
     if (quoteSource === "default") {
+      const fallback = getFallbackQuote();
+
+      setDailyQuote(fallback);
       return () => controller.abort();
     }
+
+    const fallback = getFallbackQuote(false);
 
     fetch(`/api/quote?source=${quoteSource}&t=${Date.now()}`, {
       cache: "no-store",
@@ -179,26 +150,28 @@ export default function HomePage() {
       .then((data: { ok?: boolean; quote?: string | null } | null) => {
         const quote = data?.quote?.trim();
 
-        if (quote && !getRecentQuotes().includes(getQuoteText(quote))) {
+        if (quote) {
           setDailyQuote(quote);
           rememberQuote(quote);
-          storeDailyQuote(quote, quoteSource);
+        } else {
+          setDailyQuote(fallback);
+          rememberQuote(fallback);
         }
       })
       .catch(() => {
-        // 本地随机句已兜底，这里静默失败即可。
+        setDailyQuote(fallback);
+        rememberQuote(fallback);
       });
 
     return () => controller.abort();
-  }, [quoteSource]);
+  }, [quoteSource, settingsReady]);
 
   useEffect(() => {
     const syncSettings = () => {
       const nextSource = readSettings().quoteSource;
 
       setQuoteSource(nextSource);
-      const stored = getStoredDailyQuote();
-      setDailyQuote(stored ?? getFallbackQuote(false));
+      setSettingsReady(true);
     };
 
     syncSettings();
@@ -268,7 +241,15 @@ export default function HomePage() {
       }
 
       setResultUrl(data.url);
-      setStatus(password ? "已生成密码短链，正确密码读取后才会焚毁。" : "已生成极速短链，第一次读取后立刻焚毁。");
+      setStatus("");
+      try {
+        await navigator.clipboard.writeText(data.url);
+        setCopied(true);
+        setShowAutoCopyToast(true);
+        window.setTimeout(() => setShowAutoCopyToast(false), 2200);
+      } catch {
+        setCopied(false);
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "创建失败，请稍后重试。");
     } finally {
@@ -284,8 +265,19 @@ export default function HomePage() {
     window.setTimeout(() => setCopied(false), 1800);
   }
 
+  function resetCreateForm() {
+    setSecret("");
+    setPassword("");
+    setResultUrl("");
+    setStatus("");
+    setCopied(false);
+    setShowAutoCopyToast(false);
+    window.requestAnimationFrame(() => secretRef.current?.focus({ preventScroll: true }));
+  }
+
   return (
     <Shell>
+      {showAutoCopyToast ? <div className="toast-notice">链接已经自动复制</div> : null}
       <section className="hero">
         <div className="hero-icon">
           <LogoMark large />
@@ -298,23 +290,42 @@ export default function HomePage() {
         <h1>阅后即焚</h1>
       </section>
 
-      <form className="oauth-panel create-panel" onSubmit={handleCreate}>
-        <label className="field">
-          <span className="field-head">
-            <span>秘密内容</span>
-            <button className="newline-button" onClick={insertNewLine} type="button">
-              换行
+      <form
+        className={resultUrl ? "oauth-panel create-panel create-panel--result" : "oauth-panel create-panel"}
+        onSubmit={handleCreate}
+      >
+        {resultUrl ? (
+          <div className="created-state">
+            <div className="created-badge">已生成</div>
+            <h2>阅后即焚链接</h2>
+            <div className="result-box result-box--large">
+              <code>{resultUrl}</code>
+              <button className="icon-button" onClick={copyResult} type="button">
+                {copied ? "已复制" : "复制"}
+              </button>
+            </div>
+            <button className="btn-pill btn-pill-primary" onClick={resetCreateForm} type="button">
+              创建新阅后即焚
             </button>
-          </span>
-          <textarea
-            autoComplete="off"
-            autoFocus
-            onChange={(event) => setSecret(event.target.value)}
-            placeholder={dailyQuote}
-            ref={secretRef}
-            value={secret}
-          />
-        </label>
+          </div>
+        ) : (
+          <>
+            <label className="field">
+              <span className="field-head">
+                <span>秘密内容</span>
+                <button className="newline-button" onClick={insertNewLine} type="button">
+                  换行
+                </button>
+              </span>
+              <textarea
+                autoComplete="off"
+                autoFocus
+                onChange={(event) => setSecret(event.target.value)}
+                placeholder={dailyQuote || "正在生成一言..."}
+                ref={secretRef}
+                value={secret}
+              />
+            </label>
 
         <div className="section-title">销毁时间</div>
         <div className="expiry-grid">
@@ -387,24 +398,12 @@ export default function HomePage() {
           <span className={completion.content ? "active" : ""}>
             <i />
           </span>
-          <span className={completion.time ? "active" : ""}>
-            <i />
-          </span>
           <span className={completion.password ? "active" : ""}>
             <i />
           </span>
         </div>
 
         {status ? <p className="status-text">{status}</p> : null}
-
-        {resultUrl ? (
-          <div className="result-box">
-            <code>{resultUrl}</code>
-            <button className="icon-button" onClick={copyResult} type="button">
-              {copied ? "已复制" : "复制"}
-            </button>
-          </div>
-        ) : null}
 
         <div className="action-stack">
           <button className="btn-pill btn-pill-primary" disabled={isLoading} type="submit">
@@ -418,12 +417,16 @@ export default function HomePage() {
               setPassword("");
               setResultUrl("");
               setStatus("");
+              setCopied(false);
+              setShowAutoCopyToast(false);
             }}
             type="button"
           >
             清空
           </button>
         </div>
+          </>
+        )}
       </form>
     </Shell>
   );
