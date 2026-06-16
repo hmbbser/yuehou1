@@ -492,10 +492,15 @@ textarea {
 
 .created-state {
   display: grid;
-  justify-items: center;
+  justify-items: stretch;
   gap: 16px;
   padding: clamp(16px, 3vw, 28px) 0;
   text-align: center;
+}
+
+.created-state .created-badge,
+.created-state h2 {
+  justify-self: center;
 }
 
 .created-state h2 {
