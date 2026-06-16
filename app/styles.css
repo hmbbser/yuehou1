@@ -46,6 +46,7 @@
 
 html {
   min-width: 320px;
+  height: 100%;
   overflow-x: hidden;
   background: var(--bg);
   color: var(--text);
@@ -56,8 +57,21 @@ html {
   letter-spacing: 0;
 }
 
+:root[data-background="api"] {
+  background:
+    linear-gradient(rgba(128, 128, 128, var(--bg-mask-opacity)), rgba(128, 128, 128, var(--bg-mask-opacity))),
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(255, 176, 3, 0.09), transparent 26rem),
+    var(--api-bg-image);
+  background-attachment: fixed, scroll, scroll, scroll, fixed;
+  background-position: center, 0 0, 0 0, center top, center;
+  background-size: cover, 32px 32px, 32px 32px, auto, cover;
+}
+
 body {
   position: relative;
+  height: 100%;
   overflow-x: hidden;
   min-height: 100vh;
   min-height: 100dvh;
@@ -110,9 +124,10 @@ textarea {
   position: relative;
   z-index: 0;
   display: grid;
-  min-height: 100vh;
-  min-height: 100dvh;
-  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .nav-bar {
@@ -146,7 +161,8 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  min-height: calc((100dvh - 86px) / var(--page-scale));
+  min-height: 0;
+  overflow: visible;
   padding: clamp(24px, 5dvh, 48px) 14px 18px;
   transform: scale(var(--page-scale));
   transform-origin: top center;
