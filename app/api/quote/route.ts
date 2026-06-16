@@ -70,8 +70,14 @@ async function fetchJinrishici(): Promise<Quote | null> {
   };
 }
 
-export async function GET() {
-  const fetchers = Math.random() > 0.5 ? [fetchHitokoto, fetchJinrishici] : [fetchJinrishici, fetchHitokoto];
+export async function GET(request: Request) {
+  const source = new URL(request.url).searchParams.get("source");
+  const fetchers =
+    source === "hitokoto"
+      ? [fetchHitokoto]
+      : Math.random() > 0.5
+        ? [fetchHitokoto, fetchJinrishici]
+        : [fetchJinrishici, fetchHitokoto];
 
   for (const fetchQuote of fetchers) {
     try {

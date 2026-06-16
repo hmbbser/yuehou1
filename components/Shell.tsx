@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import { LogoMark } from "./LogoMark";
+import { SettingsPanel } from "./SettingsPanel";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -12,6 +13,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <span>阅后即焚</span>
         </Link>
         <div className="nav-actions">
+          <SettingsPanel />
           <ThemeToggle />
         </div>
       </nav>

@@ -43,6 +43,20 @@ function normalizeExpiresIn(value: unknown) {
   return Math.round(seconds);
 }
 
+function getCreateErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "创建失败。";
+
+  if (message.includes("NOPERM") || message.includes("no permissions")) {
+    return "Redis Token 没有写入权限。请在 Upstash 复制 REST API 的读写 Token，并更新 Vercel 环境变量后重新部署。";
+  }
+
+  if (message.includes("Redis") || message.includes("environment")) {
+    return "Redis 环境变量未配置或不可用。请检查 UPSTASH_REDIS_REST_URL 和 UPSTASH_REDIS_REST_TOKEN。";
+  }
+
+  return "创建失败，请稍后重试。";
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -96,9 +110,15 @@ export async function POST(request: Request) {
       url: `${origin}/${code}`,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "创建失败。";
-    const status = message.includes("Redis") || message.includes("environment") ? 503 : 500;
+    const rawMessage = error instanceof Error ? error.message : "";
+    const status =
+      rawMessage.includes("NOPERM") ||
+      rawMessage.includes("no permissions") ||
+      rawMessage.includes("Redis") ||
+      rawMessage.includes("environment")
+        ? 503
+        : 500;
 
-    return jsonNoStore({ ok: false, error: message }, { status });
+    return jsonNoStore({ ok: false, error: getCreateErrorMessage(error) }, { status });
   }
 }

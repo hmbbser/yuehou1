@@ -2,10 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { LogoMark } from "@/components/LogoMark";
+import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
 import { Shell } from "@/components/Shell";
 import { encryptWithPassword } from "@/lib/client-crypto";
 
 type ExpiryValue = "300" | "custom" | "never";
+type QuoteSource = "default" | "hitokoto";
 
 type CreateResponse =
   | { ok: true; code: string; url: string; path: string }
@@ -38,6 +40,8 @@ const fallbackQuotes = [
   { text: "万物皆有裂痕，那是光进来的地方。", author: "莱昂纳德·科恩" },
 ];
 
+const dailyQuoteStorageKey = "daily-quote";
+
 function formatQuote(text: string, author?: string | null) {
   const cleanText = text.trim();
   const cleanAuthor = author?.trim();
@@ -45,13 +49,45 @@ function formatQuote(text: string, author?: string | null) {
   return cleanAuthor ? `「${cleanText}」 —— ${cleanAuthor}` : `「${cleanText}」`;
 }
 
-function getFallbackQuote() {
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getStoredDailyQuote() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(dailyQuoteStorageKey) || "null") as {
+      date?: string;
+      quote?: string;
+      source?: QuoteSource;
+    } | null;
+
+    return stored?.date === getTodayKey() && stored.source === readSettings().quoteSource && stored.quote
+      ? stored.quote
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeDailyQuote(quote: string, source: QuoteSource) {
+  localStorage.setItem(dailyQuoteStorageKey, JSON.stringify({ date: getTodayKey(), quote, source }));
+}
+
+function getFallbackQuote(rememberRecent = true) {
   const recent = getRecentQuotes();
   const candidates = fallbackQuotes.filter((quote) => !recent.includes(quote.text));
   const pool = candidates.length > 0 ? candidates : fallbackQuotes;
   const quote = pool[Math.floor(Math.random() * pool.length)];
 
-  return formatQuote(quote.text, quote.author);
+  const formatted = formatQuote(quote.text, quote.author);
+
+  if (rememberRecent) {
+    rememberQuote(formatted);
+  }
+
+  return formatted;
 }
 
 function getQuoteText(quote: string) {
@@ -84,7 +120,8 @@ export default function HomePage() {
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [dailyQuote, setDailyQuote] = useState(() => getFallbackQuote());
+  const [dailyQuote, setDailyQuote] = useState(() => getStoredDailyQuote() ?? getFallbackQuote(false));
+  const [quoteSource, setQuoteSource] = useState<QuoteSource>(() => readSettings().quoteSource);
   const [showPassword, setShowPassword] = useState(false);
   const secretRef = useRef<HTMLTextAreaElement>(null);
 
@@ -117,12 +154,24 @@ export default function HomePage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const fallback = getFallbackQuote();
+    const stored = getStoredDailyQuote();
+
+    if (stored) {
+      setDailyQuote(stored);
+      return () => controller.abort();
+    }
+
+    const fallback = dailyQuote;
 
     setDailyQuote(fallback);
     rememberQuote(fallback);
+    storeDailyQuote(fallback, quoteSource);
 
-    fetch(`/api/quote?t=${Date.now()}`, {
+    if (quoteSource === "default") {
+      return () => controller.abort();
+    }
+
+    fetch(`/api/quote?source=${quoteSource}&t=${Date.now()}`, {
       cache: "no-store",
       signal: controller.signal,
     })
@@ -133,6 +182,7 @@ export default function HomePage() {
         if (quote && !getRecentQuotes().includes(getQuoteText(quote))) {
           setDailyQuote(quote);
           rememberQuote(quote);
+          storeDailyQuote(quote, quoteSource);
         }
       })
       .catch(() => {
@@ -140,6 +190,21 @@ export default function HomePage() {
       });
 
     return () => controller.abort();
+  }, [quoteSource]);
+
+  useEffect(() => {
+    const syncSettings = () => {
+      const nextSource = readSettings().quoteSource;
+
+      setQuoteSource(nextSource);
+      const stored = getStoredDailyQuote();
+      setDailyQuote(stored ?? getFallbackQuote(false));
+    };
+
+    syncSettings();
+    window.addEventListener(settingsChangeEvent, syncSettings);
+
+    return () => window.removeEventListener(settingsChangeEvent, syncSettings);
   }, []);
 
   function insertNewLine() {
