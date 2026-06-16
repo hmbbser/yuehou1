@@ -10,6 +10,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+
+ARG NEXT_PUBLIC_SITE_NAME=阅后即焚
+ENV NEXT_PUBLIC_SITE_NAME=$NEXT_PUBLIC_SITE_NAME
+
 RUN pnpm build
 
 ENV NODE_ENV=production

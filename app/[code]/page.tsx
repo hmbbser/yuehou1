@@ -6,6 +6,7 @@ import { isBlacklisted, registerSuspiciousMiss } from "@/lib/rate-limit";
 import { getRedis } from "@/lib/redis";
 import { getSecretRecord } from "@/lib/secret-store";
 import { getClientIpFromHeaders, hashIp, isValidCode } from "@/lib/security";
+import { siteName } from "@/lib/site";
 import { PublicSecretMeta } from "@/lib/types";
 import { SecretReader } from "./SecretReader";
 
@@ -117,7 +118,7 @@ function Hero() {
           </svg>
         </span>
       </div>
-      <h1>阅后即焚</h1>
+      <h1>{siteName}</h1>
     </section>
   );
 }

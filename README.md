@@ -12,7 +12,7 @@ https://your-domain.com/ve22
 
 ## 一键部署
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/hmbbser/yuehou&env=UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN&envDescription=Create%20a%20Vercel%20KV%20or%20Upstash%20Redis%20database%20and%20paste%20the%20REST%20URL%20and%20token.&project-name=yuehou&repository-name=yuehou)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/hmbbser/yuehou&env=KV_REST_API_URL,KV_REST_API_TOKEN,NEXT_PUBLIC_SITE_NAME&envDescription=Create%20a%20Vercel%20KV%20or%20Upstash%20Redis%20database%20and%20paste%20the%20REST%20URL%20and%20token.%20NEXT_PUBLIC_SITE_NAME%20is%20optional%20and%20changes%20the%20global%20site%20name.&project-name=yuehou&repository-name=yuehou)
 
 ## 功能
 
@@ -72,6 +72,14 @@ KV_REST_API_TOKEN=...
 
 本项目已经兼容这两个变量名。
 
+如果想把页面上的 `阅后即焚` 改成自己的名字，在 Vercel 的环境变量里再添加：
+
+```bash
+NEXT_PUBLIC_SITE_NAME=你的站点名字
+```
+
+这个变量会修改全站标题、按钮文字、浏览器标题和聊天软件里的链接预览标题；链接预览的说明文字仍会保留。
+
 ### 方法 B：在 Upstash 创建 Redis
 
 1. 打开 [Upstash Console](https://console.upstash.com/)。
@@ -90,7 +98,8 @@ UPSTASH_REDIS_REST_TOKEN=...
 8. 回到 Vercel 项目。
 9. 打开 `Settings -> Environment Variables`。
 10. 添加上面两个变量。
-11. 保存后重新部署项目。
+11. 如果想自定义站点名字，再添加 `NEXT_PUBLIC_SITE_NAME=你的站点名字`。
+12. 保存后重新部署项目。
 
 ### 3. 重新部署
 
@@ -150,11 +159,14 @@ cd /opt/yuehou
 - `yuehou`：Next.js 应用，监听本机 `127.0.0.1:3000`
 - `yuehou-redis`：Redis 7，数据保存到 Docker volume
 
-直接构建并启动：
+运行交互部署脚本：
 
 ```bash
-sudo docker compose up -d --build
+chmod +x scripts/deploy-docker.sh
+./scripts/deploy-docker.sh
 ```
+
+脚本会先提示你输入网站名字。直接回车会使用默认的 `阅后即焚`，输入自定义名字后，全站标题、按钮文字和链接预览标题都会随之改变。
 
 查看状态和日志：
 
@@ -241,7 +253,7 @@ https://example.com
 ```bash
 cd /opt/yuehou
 sudo git pull
-sudo docker compose up -d --build
+./scripts/deploy-docker.sh
 ```
 
 ### 7. 常用维护命令

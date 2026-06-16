@@ -1,10 +1,22 @@
 import type { Metadata, Viewport } from "next";
 import { ReactNode } from "react";
+import { siteDescription, siteName } from "@/lib/site";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "阅后即焚",
-  description: "4 位极短链接的无服务器阅后即焚工具",
+  title: siteName,
+  description: siteDescription,
+  openGraph: {
+    title: siteName,
+    description: siteDescription,
+    siteName,
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: siteName,
+    description: siteDescription,
+  },
 };
 
 export const viewport: Viewport = {

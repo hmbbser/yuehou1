@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { decryptWithPassword, derivePasswordProof } from "@/lib/client-crypto";
+import { siteName } from "@/lib/site";
 import { EncryptedPayload, PublicSecretMeta } from "@/lib/types";
 
 type ConsumeResponse =
@@ -165,13 +166,13 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
             {isLoading ? "读取中..." : "读取并销毁"}
           </button>
           <a className="btn-pill btn-pill-secondary" href="/">
-            创建新阅后即焚
+            创建新{siteName}
           </a>
         </div>
       ) : (
         <div className="action-stack">
           <a className="btn-pill btn-pill-primary" href="/">
-            创建新阅后即焚
+            创建新{siteName}
           </a>
         </div>
       )}

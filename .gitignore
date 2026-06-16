@@ -7,5 +7,6 @@ coverage/
 *.log
 *.tsbuildinfo
 .env
+.env.docker
 .env*.local
 !.env.example

@@ -5,6 +5,7 @@ import { LogoMark } from "@/components/LogoMark";
 import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
 import { Shell } from "@/components/Shell";
 import { encryptWithPassword } from "@/lib/client-crypto";
+import { siteName } from "@/lib/site";
 
 type ExpiryValue = "300" | "custom" | "never";
 type QuoteSource = "default" | "hitokoto";
@@ -287,7 +288,7 @@ export default function HomePage() {
             </svg>
           </span>
         </div>
-        <h1>阅后即焚</h1>
+        <h1>{siteName}</h1>
       </section>
 
       <form
@@ -297,7 +298,7 @@ export default function HomePage() {
         {resultUrl ? (
           <div className="created-state">
             <div className="created-badge">已生成</div>
-            <h2>阅后即焚链接</h2>
+            <h2>{siteName}链接</h2>
             <div className="result-box result-box--large">
               <code>{resultUrl}</code>
               <button className="icon-button" onClick={copyResult} type="button">
@@ -305,7 +306,7 @@ export default function HomePage() {
               </button>
             </div>
             <button className="btn-pill btn-pill-primary" onClick={resetCreateForm} type="button">
-              创建新阅后即焚
+              创建新{siteName}
             </button>
           </div>
         ) : (
@@ -407,7 +408,7 @@ export default function HomePage() {
 
         <div className="action-stack">
           <button className="btn-pill btn-pill-primary" disabled={isLoading} type="submit">
-            {isLoading ? "生成中..." : "生成阅后即焚链接"}
+            {isLoading ? "生成中..." : `生成${siteName}链接`}
           </button>
           <button
             className="btn-pill btn-pill-secondary"

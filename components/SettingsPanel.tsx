@@ -39,7 +39,7 @@ function readSettings(): SiteSettings {
     return {
       backgroundApiUrl: typeof saved.backgroundApiUrl === "string" ? saved.backgroundApiUrl : "",
       backgroundMode: saved.backgroundMode === "api" ? "api" : "default",
-      backgroundOpacity: clamp(Number(saved.backgroundOpacity ?? defaultSettings.backgroundOpacity), 0, 70),
+      backgroundOpacity: clamp(Number(saved.backgroundOpacity ?? defaultSettings.backgroundOpacity), 1, 100),
       fontScale: clamp(Number(saved.fontScale ?? defaultSettings.fontScale), 85, 125),
       pageScale: clamp(Number(saved.pageScale ?? defaultSettings.pageScale), 85, 115),
       quoteSource: saved.quoteSource === "hitokoto" ? "hitokoto" : "default",
@@ -208,10 +208,10 @@ export function SettingsPanel() {
           ) : null}
 
           <label className="settings-slider">
-            <span>灰色蒙版 {settings.backgroundOpacity}%</span>
+            <span>黑色蒙版 {settings.backgroundOpacity}%</span>
             <input
-              max="70"
-              min="0"
+              max="100"
+              min="1"
               onChange={(event) => updateBackgroundOpacity(event.target.value)}
               onInput={(event) => updateBackgroundOpacity(event.currentTarget.value)}
               type="range"

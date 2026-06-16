@@ -59,14 +59,12 @@ html {
 
 :root[data-background="api"] {
   background:
-    linear-gradient(rgba(128, 128, 128, var(--bg-mask-opacity)), rgba(128, 128, 128, var(--bg-mask-opacity))),
-    linear-gradient(var(--bg-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px),
-    radial-gradient(circle at 50% 0%, rgba(255, 176, 3, 0.09), transparent 26rem),
-    var(--api-bg-image);
-  background-attachment: fixed, scroll, scroll, scroll, fixed;
-  background-position: center, 0 0, 0 0, center top, center;
-  background-size: cover, 32px 32px, 32px 32px, auto, cover;
+    linear-gradient(rgba(0, 0, 0, var(--bg-mask-opacity)), rgba(0, 0, 0, var(--bg-mask-opacity))),
+    var(--api-bg-image),
+    var(--bg);
+  background-attachment: fixed, fixed, scroll;
+  background-position: center, center, center;
+  background-size: cover, cover, auto;
 }
 
 body {
@@ -87,14 +85,12 @@ body {
 
 :root[data-background="api"] body {
   background:
-    linear-gradient(rgba(128, 128, 128, var(--bg-mask-opacity)), rgba(128, 128, 128, var(--bg-mask-opacity))),
-    linear-gradient(var(--bg-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px),
-    radial-gradient(circle at 50% 0%, rgba(255, 176, 3, 0.09), transparent 26rem),
-    var(--api-bg-image);
-  background-attachment: fixed, scroll, scroll, scroll, fixed;
-  background-position: center, 0 0, 0 0, center top, center;
-  background-size: cover, 32px 32px, 32px 32px, auto, cover;
+    linear-gradient(rgba(0, 0, 0, var(--bg-mask-opacity)), rgba(0, 0, 0, var(--bg-mask-opacity))),
+    var(--api-bg-image),
+    var(--bg);
+  background-attachment: fixed, fixed, scroll;
+  background-position: center, center, center;
+  background-size: cover, cover, auto;
 }
 
 button,
@@ -124,16 +120,13 @@ textarea {
   position: relative;
   z-index: 0;
   display: grid;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .page-shell:has(.reader-panel) {
-  height: auto;
-  min-height: 100vh;
-  min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -176,6 +169,7 @@ textarea {
 .main-stage {
   display: flex;
   width: calc(100% / var(--page-scale));
+  justify-self: center;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
@@ -187,10 +181,6 @@ textarea {
 }
 
 .footer {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
   z-index: 15;
   padding: 8px 16px;
   color: var(--muted);
