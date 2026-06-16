@@ -6,6 +6,7 @@ type QuoteSource = "default" | "hitokoto";
 type BackgroundMode = "default" | "api";
 
 type SiteSettings = {
+  backgroundApiUrl: string;
   backgroundMode: BackgroundMode;
   backgroundOpacity: number;
   fontScale: number;
@@ -17,6 +18,7 @@ const settingsStorageKey = "yuehou-settings";
 const settingsChangeEvent = "yuehou-settings-change";
 
 const defaultSettings: SiteSettings = {
+  backgroundApiUrl: "",
   backgroundMode: "default",
   backgroundOpacity: 28,
   fontScale: 100,
@@ -35,6 +37,7 @@ function readSettings(): SiteSettings {
     const saved = JSON.parse(localStorage.getItem(settingsStorageKey) || "{}") as Partial<SiteSettings>;
 
     return {
+      backgroundApiUrl: typeof saved.backgroundApiUrl === "string" ? saved.backgroundApiUrl : "",
       backgroundMode: saved.backgroundMode === "api" ? "api" : "default",
       backgroundOpacity: clamp(Number(saved.backgroundOpacity ?? defaultSettings.backgroundOpacity), 0, 70),
       fontScale: clamp(Number(saved.fontScale ?? defaultSettings.fontScale), 85, 125),
@@ -67,7 +70,9 @@ function saveSettings(settings: SiteSettings) {
 
 async function applyApiBackground() {
   try {
-    const response = await fetch(`/api/background?t=${Date.now()}`, { cache: "no-store" });
+    const settings = readSettings();
+    const query = settings.backgroundApiUrl ? `&url=${encodeURIComponent(settings.backgroundApiUrl)}` : "";
+    const response = await fetch(`/api/background?t=${Date.now()}${query}`, { cache: "no-store" });
     const data = (await response.json()) as { ok?: boolean; url?: string };
 
     if (data.ok && data.url) {
@@ -115,6 +120,18 @@ export function SettingsPanel() {
     if (next.backgroundMode === "api") {
       void applyApiBackground();
     }
+  }
+
+  function updateBackgroundOpacity(value: string) {
+    updateSettings({ ...settings, backgroundOpacity: Number(value) });
+  }
+
+  function updateFontScale(value: string) {
+    updateSettings({ ...settings, fontScale: Number(value) });
+  }
+
+  function updatePageScale(value: string) {
+    updateSettings({ ...settings, pageScale: Number(value) });
   }
 
   return (
@@ -175,14 +192,28 @@ export function SettingsPanel() {
             </div>
           </div>
 
+          {settings.backgroundMode === "api" ? (
+            <label className="settings-input">
+              <span>图片 API</span>
+              <input
+                onChange={(event) => updateSettings({ ...settings, backgroundApiUrl: event.target.value })}
+                onInput={(event) =>
+                  updateSettings({ ...settings, backgroundApiUrl: event.currentTarget.value })
+                }
+                placeholder="留空使用默认图片 API"
+                type="url"
+                value={settings.backgroundApiUrl}
+              />
+            </label>
+          ) : null}
+
           <label className="settings-slider">
             <span>灰色蒙版 {settings.backgroundOpacity}%</span>
             <input
               max="70"
               min="0"
-              onChange={(event) =>
-                updateSettings({ ...settings, backgroundOpacity: Number(event.target.value) })
-              }
+              onChange={(event) => updateBackgroundOpacity(event.target.value)}
+              onInput={(event) => updateBackgroundOpacity(event.currentTarget.value)}
               type="range"
               value={settings.backgroundOpacity}
             />
@@ -193,7 +224,8 @@ export function SettingsPanel() {
             <input
               max="125"
               min="85"
-              onChange={(event) => updateSettings({ ...settings, fontScale: Number(event.target.value) })}
+              onChange={(event) => updateFontScale(event.target.value)}
+              onInput={(event) => updateFontScale(event.currentTarget.value)}
               step="5"
               type="range"
               value={settings.fontScale}
@@ -205,7 +237,8 @@ export function SettingsPanel() {
             <input
               max="115"
               min="85"
-              onChange={(event) => updateSettings({ ...settings, pageScale: Number(event.target.value) })}
+              onChange={(event) => updatePageScale(event.target.value)}
+              onInput={(event) => updatePageScale(event.currentTarget.value)}
               step="5"
               type="range"
               value={settings.pageScale}

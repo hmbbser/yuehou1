@@ -46,6 +46,7 @@
 
 html {
   min-width: 320px;
+  overflow-x: hidden;
   background: var(--bg);
   color: var(--text);
   font-size: calc(16px * var(--font-scale));
@@ -57,6 +58,7 @@ html {
 
 body {
   position: relative;
+  overflow-x: hidden;
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
@@ -69,32 +71,16 @@ body {
   color: var(--text);
 }
 
-body::after {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  content: "";
-  pointer-events: none;
-}
-
-body::after {
-  background: rgba(128, 128, 128, var(--bg-mask-opacity));
-  opacity: 0;
-}
-
-:root[data-background="api"] body::after {
-  opacity: 1;
-}
-
 :root[data-background="api"] body {
   background:
+    linear-gradient(rgba(128, 128, 128, var(--bg-mask-opacity)), rgba(128, 128, 128, var(--bg-mask-opacity))),
     linear-gradient(var(--bg-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px),
     radial-gradient(circle at 50% 0%, rgba(255, 176, 3, 0.09), transparent 26rem),
     var(--api-bg-image);
-  background-attachment: scroll, scroll, scroll, fixed;
-  background-position: 0 0, 0 0, center top, center;
-  background-size: 32px 32px, 32px 32px, auto, cover;
+  background-attachment: fixed, scroll, scroll, scroll, fixed;
+  background-position: center, 0 0, 0 0, center top, center;
+  background-size: cover, 32px 32px, 32px 32px, auto, cover;
 }
 
 button,
@@ -156,10 +142,11 @@ textarea {
 
 .main-stage {
   display: flex;
-  width: 100%;
+  width: calc(100% / var(--page-scale));
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
+  min-height: calc((100dvh - 86px) / var(--page-scale));
   padding: clamp(24px, 5dvh, 48px) 14px 18px;
   transform: scale(var(--page-scale));
   transform-origin: top center;
@@ -329,16 +316,34 @@ textarea {
 }
 
 .settings-row,
+.settings-input,
 .settings-slider {
   display: grid;
   gap: 8px;
 }
 
 .settings-row > span,
+.settings-input > span,
 .settings-slider > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.settings-input input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-solid);
+  color: var(--text);
+  outline: none;
+  padding: 0 12px;
+}
+
+.settings-input input:focus {
+  border-color: color-mix(in srgb, var(--text) 42%, var(--border));
+  box-shadow: 0 0 0 3px var(--focus);
 }
 
 .segmented-control {
