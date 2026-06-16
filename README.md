@@ -18,6 +18,7 @@ https://your-domain.com/ve22
 
 - 4 位短链接，直接是根路径，例如 `/ve22`
 - 打开读取一次后立即销毁
+- 支持文字和多张照片一起阅后即焚
 - 支持可选密码
 - 密码输错不会销毁内容
 - 支持 5 分钟、自定义分钟、无限期直到读取
@@ -26,17 +27,17 @@ https://your-domain.com/ve22
 - 支持每日一言占位文案
 - 适配手机、iPad、电脑
 - 支持 Vercel Serverless + Vercel KV / Upstash Redis
-- 支持自有服务器 Docker 部署，本机 Redis 保存数据
+- 支持自有服务器 Docker 部署，本机 Redis 内存保存未读数据
 
 ## 怎么使用
 
 1. 打开网站。
-2. 直接输入要分享的秘密内容。
+2. 直接输入要分享的秘密内容，也可以上传多张照片。
 3. 选择销毁时间。
 4. 重要内容可以设置访问密码。
 5. 点击生成链接。
 6. 复制生成的短链接发给别人。
-7. 对方成功读取后，Redis 里的内容会被删除，之后再打开就看不到了。
+7. 对方成功读取后，Redis 里的文字和照片会被删除，之后再打开就看不到了。
 
 ## Vercel 部署步骤
 
@@ -157,7 +158,7 @@ cd /opt/yuehou
 项目已经带有 `Dockerfile` 和 `docker-compose.yml`。默认会启动两个容器：
 
 - `yuehou`：Next.js 应用，监听本机 `127.0.0.1:3000`
-- `yuehou-redis`：Redis 7，数据保存到 Docker volume
+- `yuehou-redis`：Redis 7，默认关闭 AOF/RDB，未读内容只保存在 Redis 内存里
 
 运行交互部署脚本：
 
@@ -181,7 +182,14 @@ sudo docker compose logs -f yuehou
 REDIS_URL: redis://redis:6379
 ```
 
-Redis 数据会保存在 `yuehou-redis-data` 这个 Docker volume 里。只要不删除这个 volume，容器重建后数据仍会保留。
+Docker 默认配置会关闭 Redis 的 AOF 和 RDB 落盘，避免读过或未读的文字、照片被额外写进服务器磁盘。取舍是：如果 Redis 容器重启、服务器重启，尚未读取的阅后即焚内容会丢失。
+
+如果你之前部署过旧版本，并且服务器上存在旧的 `yuehou-redis-data` volume，里面可能还留有旧版 Redis 持久化文件。确认不需要旧数据后可以删除：
+
+```bash
+sudo docker volume ls | grep yuehou-redis-data
+for v in $(sudo docker volume ls -q | grep 'yuehou-redis-data$'); do sudo docker volume rm "$v"; done
+```
 
 本机测试：
 
@@ -270,16 +278,17 @@ sudo docker compose logs -f
 sudo docker compose restart yuehou
 ```
 
-停止服务但保留 Redis 数据：
+停止服务，Redis 内存里的未读内容也会随之清空：
 
 ```bash
 sudo docker compose down
 ```
 
-如果确认要连 Redis 数据一起删除，再执行：
+如果你是从旧版升级，并且还想顺手删除旧版 Redis volume：
 
 ```bash
-sudo docker compose down -v
+sudo docker volume ls | grep yuehou-redis-data
+for v in $(sudo docker volume ls -q | grep 'yuehou-redis-data$'); do sudo docker volume rm "$v"; done
 ```
 
 ## 安全说明
