@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    rect { fill: #111113; }
+    text { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      rect { fill: #f3f3f1; }
+      text { fill: #111113; }
+    }
+  </style>
+  <rect width="64" height="64" rx="18"/>
+  <text x="32" y="41" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="34" font-weight="900">焚</text>
+</svg>

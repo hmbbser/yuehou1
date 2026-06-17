@@ -1,0 +1,12 @@
+.next/
+node_modules/
+.vercel/
+out/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.docker
+.env*.local
+!.env.example
