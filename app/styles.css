@@ -376,6 +376,11 @@ textarea {
   box-shadow: 0 0 0 3px var(--focus);
 }
 
+.settings-input input:disabled {
+  cursor: not-allowed;
+  opacity: 0.66;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -432,6 +437,11 @@ textarea {
   accent-color: var(--text);
 }
 
+.settings-check:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.66;
+}
+
 .docker-update-panel {
   border-top: 1px solid var(--border);
   padding-top: 12px;
@@ -464,7 +474,7 @@ textarea {
 }
 
 .docker-update-actions button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.62;
   transform: none;
 }
