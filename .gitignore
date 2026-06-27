@@ -6,6 +6,7 @@ dist/
 coverage/
 *.log
 *.tsbuildinfo
+.yuehou-media/
 .env
 .env.docker
 .env*.local

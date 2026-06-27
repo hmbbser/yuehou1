@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "crypto";
 import { createReadStream } from "fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile, appendFile } from "fs/promises";
+import os from "os";
 import path from "path";
 
 export const maxVideoBytes = 30 * 1024 * 1024 * 1024;
-export const mediaChunkBytes = 8 * 1024 * 1024;
+export const mediaChunkBytes = 3 * 1024 * 1024;
 
 type MediaStatus = "pending" | "ready";
 
@@ -29,7 +30,15 @@ export type MediaRange = {
 const revealWindowMs = 6 * 60 * 60 * 1000;
 
 function mediaRoot() {
-  return process.env.MEDIA_STORAGE_DIR || path.join(process.cwd(), ".yuehou-media");
+  if (process.env.MEDIA_STORAGE_DIR) {
+    return process.env.MEDIA_STORAGE_DIR;
+  }
+
+  if (process.env.VERCEL || process.cwd().startsWith("/var/task")) {
+    return path.join(os.tmpdir(), ".yuehou-media");
+  }
+
+  return path.join(process.cwd(), ".yuehou-media");
 }
 
 function assertMediaId(id: string) {
