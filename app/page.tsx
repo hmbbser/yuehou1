@@ -6,7 +6,7 @@ import { LogoMark } from "@/components/LogoMark";
 import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
 import { Shell } from "@/components/Shell";
 import { encryptWithPassword } from "@/lib/client-crypto";
-import { packSecretContent, SecretImage } from "@/lib/secret-content";
+import { packSecretContent, SecretImage, SecretVideo } from "@/lib/secret-content";
 import { siteName } from "@/lib/site";
 
 type ExpiryValue = "300" | "custom" | "never";
@@ -15,6 +15,22 @@ type QuoteSource = "default" | "hitokoto";
 type CreateResponse =
   | { ok: true; code: string; url: string; path: string }
   | { ok: false; error: string };
+
+type MediaUploadInitResponse =
+  | {
+      ok: true;
+      chunkSize: number;
+      media: SecretVideo;
+      uploadId: string;
+      uploadToken: string;
+    }
+  | { ok: false; error: string };
+
+type UploadProgress = {
+  fileName: string;
+  loaded: number;
+  total: number;
+};
 
 const expiryOptions: Array<{ label: string; value: ExpiryValue; hint: string }> = [
   { label: "5 分钟", value: "300", hint: "快速销毁" },
@@ -26,6 +42,7 @@ const maxStoredImageBytes = 700 * 1024;
 const maxStoredImagesBytes = 2.6 * 1024 * 1024;
 const maxPhotoCount = 6;
 const maxImageSide = 1280;
+const maxVideoBytes = 30 * 1024 * 1024 * 1024;
 
 const fallbackQuotes = [
   { text: "黑色世界唯有东方的曙光。", author: "佚名" },
@@ -177,6 +194,54 @@ async function prepareImage(file: File): Promise<SecretImage> {
   }
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
+}
+
+function uploadChunk(
+  url: string,
+  blob: Blob,
+  token: string,
+  offset: number,
+  onProgress: (loaded: number) => void,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+
+    request.open("PUT", url);
+    request.setRequestHeader("x-upload-token", token);
+    request.setRequestHeader("x-upload-offset", String(offset));
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(offset + event.loaded);
+      }
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve();
+      } else {
+        try {
+          const data = JSON.parse(request.responseText) as { error?: string };
+
+          reject(new Error(data.error || "视频上传失败。"));
+        } catch {
+          reject(new Error("视频上传失败。"));
+        }
+      }
+    };
+    request.onerror = () => reject(new Error("视频上传失败，请检查网络。"));
+    request.send(blob);
+  });
+}
+
 export default function HomePage() {
   const [secret, setSecret] = useState("");
   const [password, setPassword] = useState("");
@@ -189,8 +254,10 @@ export default function HomePage() {
   const [showAutoCopyToast, setShowAutoCopyToast] = useState(false);
   const [dailyQuote, setDailyQuote] = useState("");
   const [photos, setPhotos] = useState<SecretImage[]>([]);
+  const [videos, setVideos] = useState<SecretVideo[]>([]);
   const [previewPhoto, setPreviewPhoto] = useState<SecretImage | null>(null);
   const [isPreparingPhoto, setIsPreparingPhoto] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [quoteSource, setQuoteSource] = useState<QuoteSource>(() => readSettings().quoteSource);
   const [settingsReady, setSettingsReady] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -207,7 +274,7 @@ export default function HomePage() {
     return Number(expiry);
   }, [customMinutes, expiry]);
   const completion = {
-    content: secret.trim().length > 0 || photos.length > 0,
+    content: secret.trim().length > 0 || photos.length > 0 || videos.length > 0,
     password: password.trim().length > 0,
   };
   const storedPhotosSize = photos.reduce((total, photo) => total + photo.size, 0);
@@ -301,8 +368,8 @@ export default function HomePage() {
     setStatus("");
     setCopied(false);
 
-    if (!secret.trim() && photos.length === 0) {
-      setStatus("先写一点要焚毁的内容，或上传一张图片。");
+    if (!secret.trim() && photos.length === 0 && videos.length === 0) {
+      setStatus("先写一点要焚毁的内容，或上传照片或视频。");
       return;
     }
 
@@ -317,6 +384,7 @@ export default function HomePage() {
       const content = packSecretContent({
         images: photos,
         text: secret,
+        videos,
       });
       const body =
         password.trim().length > 0
@@ -360,43 +428,163 @@ export default function HomePage() {
     }
   }
 
-  async function handlePhotoChange(fileList: FileList | null | undefined) {
-    const files = Array.from(fileList ?? []);
+  async function uploadVideo(file: File) {
+    if (!file.type.startsWith("video/")) {
+      throw new Error("请选择视频文件。");
+    }
 
+    if (file.size > maxVideoBytes) {
+      throw new Error("视频最大不能超过 30 GB。");
+    }
+
+    if (expiresIn === 0) {
+      throw new Error("自定义销毁时间至少 1 分钟。");
+    }
+
+    const initResponse = await fetch("/api/media/uploads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expiresIn,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      }),
+    });
+    const initData = (await initResponse.json()) as MediaUploadInitResponse;
+
+    if (!initResponse.ok || !initData.ok) {
+      throw new Error(initData.ok === false ? initData.error : "视频上传失败。");
+    }
+
+    let offset = 0;
+
+    setUploadProgress({ fileName: file.name, loaded: 0, total: file.size });
+
+    while (offset < file.size) {
+      const chunk = file.slice(offset, Math.min(offset + initData.chunkSize, file.size));
+
+      await uploadChunk(
+        `/api/media/uploads/${initData.uploadId}/chunk`,
+        chunk,
+        initData.uploadToken,
+        offset,
+        (loaded) => setUploadProgress({ fileName: file.name, loaded, total: file.size }),
+      );
+      offset += chunk.size;
+      setUploadProgress({ fileName: file.name, loaded: offset, total: file.size });
+    }
+
+    const completeResponse = await fetch(`/api/media/uploads/${initData.uploadId}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: initData.uploadToken }),
+    });
+    const completeData = (await completeResponse.json()) as { ok: true } | { ok: false; error: string };
+
+    if (!completeResponse.ok || !completeData.ok) {
+      throw new Error(completeData.ok === false ? completeData.error : "视频上传失败。");
+    }
+
+    return initData.media;
+  }
+
+  async function handleMediaFiles(files: File[]) {
     if (files.length === 0) return;
 
     setStatus("");
     setIsPreparingPhoto(true);
 
     try {
-      if (photos.length + files.length > maxPhotoCount) {
-        throw new Error(`最多上传 ${maxPhotoCount} 张图片。`);
-      }
-
       const nextPhotos = [...photos];
+      const nextVideos = [...videos];
       let nextSize = storedPhotosSize;
 
       for (const file of files) {
-        const nextPhoto = await prepareImage(file);
+        if (file.type.startsWith("image/")) {
+          if (nextPhotos.length >= maxPhotoCount) {
+            throw new Error(`最多上传 ${maxPhotoCount} 张图片。`);
+          }
 
-        if (nextSize + nextPhoto.size > maxStoredImagesBytes) {
-          throw new Error("图片总大小太大，请移除几张或换更小的图片。");
+          const nextPhoto = await prepareImage(file);
+
+          if (nextSize + nextPhoto.size > maxStoredImagesBytes) {
+            throw new Error("图片总大小太大，请移除几张或换更小的图片。");
+          }
+
+          nextPhotos.push(nextPhoto);
+          nextSize += nextPhoto.size;
+        } else if (file.type.startsWith("video/")) {
+          const nextVideo = await uploadVideo(file);
+
+          nextVideos.push(nextVideo);
+          setVideos([...nextVideos]);
+        } else {
+          throw new Error("请选择照片或视频文件。");
         }
-
-        nextPhotos.push(nextPhoto);
-        nextSize += nextPhoto.size;
       }
 
       setPhotos(nextPhotos);
+      setVideos(nextVideos);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "图片处理失败，请换一张试试。");
+      setStatus(error instanceof Error ? error.message : "媒体处理失败，请换一个文件试试。");
     } finally {
       setIsPreparingPhoto(false);
+      setUploadProgress(null);
       if (photoInputRef.current) {
         photoInputRef.current.value = "";
       }
     }
   }
+
+  async function handlePhotoChange(fileList: FileList | null | undefined) {
+    await handleMediaFiles(Array.from(fileList ?? []));
+  }
+
+  async function pasteClipboardMedia() {
+    if (!navigator.clipboard?.read) {
+      setStatus("当前浏览器不支持读取剪贴板文件。");
+      return;
+    }
+
+    try {
+      const items = await navigator.clipboard.read();
+      const files: File[] = [];
+
+      for (const item of items) {
+        const type = item.types.find((value) => value.startsWith("image/") || value.startsWith("video/"));
+
+        if (type) {
+          const blob = await item.getType(type);
+          const extension = type.split("/")[1]?.split(";")[0] || "media";
+
+          files.push(new File([blob], `clipboard-${Date.now()}.${extension}`, { type }));
+        }
+      }
+
+      if (files.length === 0) {
+        setStatus("剪贴板没有照片或视频。");
+        return;
+      }
+
+      await handleMediaFiles(files);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "读取剪贴板失败。");
+    }
+  }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "v") {
+        event.preventDefault();
+        void pasteClipboardMedia();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   async function copyResult() {
     if (!resultUrl) return;
@@ -410,10 +598,12 @@ export default function HomePage() {
     setSecret("");
     setPassword("");
     setPhotos([]);
+    setVideos([]);
     setPreviewPhoto(null);
     setResultUrl("");
     setStatus("");
     setCopied(false);
+    setUploadProgress(null);
     setShowAutoCopyToast(false);
     window.requestAnimationFrame(() => secretRef.current?.focus({ preventScroll: true }));
   }
@@ -471,7 +661,7 @@ export default function HomePage() {
             </label>
 
         <div className="photo-field">
-          {photos.length > 0 ? (
+          {photos.length > 0 || videos.length > 0 ? (
             <div className="photo-list">
               {photos.map((photo, index) => (
                 <div className="photo-preview" key={`${photo.name}-${photo.size}-${index}`}>
@@ -497,27 +687,53 @@ export default function HomePage() {
                   </button>
                 </div>
               ))}
+              {videos.map((video, index) => (
+                <div className="photo-preview" key={`${video.id}-${index}`}>
+                  <div className="video-thumb" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="m9 8 7 4-7 4V8Z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <strong>{video.name || "已上传视频"}</strong>
+                    <span>{formatFileSize(video.size)}</span>
+                  </div>
+                  <button
+                    className="icon-button"
+                    onClick={() => setVideos((value) => value.filter((_, itemIndex) => itemIndex !== index))}
+                    type="button"
+                  >
+                    移除
+                  </button>
+                </div>
+              ))}
             </div>
           ) : null}
 
-          {photos.length < maxPhotoCount ? (
-            <label
-              className={
-                isPreparingPhoto ? "photo-upload-button photo-upload-button--disabled" : "photo-upload-button"
-              }
-            >
-              {isPreparingPhoto ? "处理图片中..." : photos.length > 0 ? "继续上传图片" : "上传图片"}
-              <input
-                accept="image/*"
-                className="photo-input"
-                disabled={isPreparingPhoto}
-                multiple
-                onChange={(event) => void handlePhotoChange(event.target.files)}
-                ref={photoInputRef}
-                type="file"
-              />
-            </label>
+          {uploadProgress ? (
+            <div className="upload-progress" aria-label="上传进度">
+              <div>
+                <strong>{uploadProgress.fileName}</strong>
+                <span>{Math.round((uploadProgress.loaded / uploadProgress.total) * 100)}%</span>
+              </div>
+              <progress max={uploadProgress.total} value={uploadProgress.loaded} />
+            </div>
           ) : null}
+
+          <label
+            className={isPreparingPhoto ? "photo-upload-button photo-upload-button--disabled" : "photo-upload-button"}
+          >
+            {isPreparingPhoto ? "处理中..." : photos.length > 0 || videos.length > 0 ? "继续上传" : "上传照片/视频"}
+            <input
+              accept="image/*,video/*"
+              className="photo-input"
+              disabled={isPreparingPhoto}
+              multiple
+              onChange={(event) => void handlePhotoChange(event.target.files)}
+              ref={photoInputRef}
+              type="file"
+            />
+          </label>
         </div>
 
         <div className="section-title">销毁时间</div>
@@ -609,10 +825,12 @@ export default function HomePage() {
               setSecret("");
               setPassword("");
               setPhotos([]);
+              setVideos([]);
               setPreviewPhoto(null);
               setResultUrl("");
               setStatus("");
               setCopied(false);
+              setUploadProgress(null);
               setShowAutoCopyToast(false);
             }}
             type="button"

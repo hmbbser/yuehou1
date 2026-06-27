@@ -16,7 +16,7 @@ type ConsumeResponse =
 
 export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   const [password, setPassword] = useState("");
-  const [secret, setSecret] = useState<SecretContent>({ images: [], text: "" });
+  const [secret, setSecret] = useState<SecretContent>({ images: [], text: "", videos: [] });
   const [previewImage, setPreviewImage] = useState<SecretContent["images"][number] | null>(null);
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -142,7 +142,7 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
         </label>
       ) : null}
 
-      {secret.text || secret.images.length > 0 ? (
+      {secret.text || secret.images.length > 0 || secret.videos.length > 0 ? (
         <div className="secret-output">
           {secret.images.length > 0 ? (
             <div className="secret-image-grid">
@@ -157,6 +157,20 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img alt="阅后即焚图片" className="secret-output-image" src={image.dataUrl} />
                 </button>
+              ))}
+            </div>
+          ) : null}
+          {secret.videos.length > 0 ? (
+            <div className="secret-video-list">
+              {secret.videos.map((video) => (
+                <video
+                  className="secret-output-video"
+                  controls
+                  key={video.id}
+                  playsInline
+                  preload="metadata"
+                  src={`/api/media/${video.id}?token=${encodeURIComponent(video.token)}`}
+                />
               ))}
             </div>
           ) : null}
