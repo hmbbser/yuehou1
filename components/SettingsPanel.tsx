@@ -18,12 +18,24 @@ type DockerUpdateResponse =
   | {
       ok: true;
       currentVersion: string;
+      deployment: DeploymentKind;
       enabled: true;
       latestVersion: string | null;
       started?: boolean;
       updateAvailable: boolean;
     }
-  | { ok: false; enabled?: boolean; error: string };
+  | { ok: false; deployment?: DeploymentKind; enabled?: boolean; error: string };
+
+type DeploymentKind = "docker" | "vercel" | "other";
+
+type DockerUpdateMetaResponse =
+  | {
+      ok: true;
+      currentVersion: string;
+      deployment: DeploymentKind;
+      enabled: boolean;
+    }
+  | { ok: false; error: string };
 
 const settingsStorageKey = "yuehou-settings";
 const settingsChangeEvent = "yuehou-settings-change";
@@ -101,6 +113,8 @@ export function SettingsPanel() {
   const [dockerToken, setDockerToken] = useState("");
   const [dockerStatus, setDockerStatus] = useState("");
   const [dockerVersion, setDockerVersion] = useState("");
+  const [dockerDeployment, setDockerDeployment] = useState<DeploymentKind>("other");
+  const [dockerUpdateEnabled, setDockerUpdateEnabled] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -117,6 +131,7 @@ export function SettingsPanel() {
     }
 
     setDockerToken(localStorage.getItem(dockerUpdateTokenStorageKey) || "");
+    void loadDockerUpdateMeta();
   }, []);
 
   useEffect(() => {
@@ -154,7 +169,41 @@ export function SettingsPanel() {
     updateSettings({ ...settings, pageScale: Number(value) });
   }
 
+  async function loadDockerUpdateMeta() {
+    try {
+      const response = await fetch(`/api/docker-update?t=${Date.now()}`, { cache: "no-store" });
+      const data = (await response.json()) as DockerUpdateMetaResponse;
+
+      if (!response.ok || !data.ok) {
+        setDockerStatus(data.ok === false ? data.error : "Docker 更新状态读取失败。");
+        return;
+      }
+
+      setDockerDeployment(data.deployment);
+      setDockerUpdateEnabled(data.enabled);
+      setDockerVersion(`当前 ${data.currentVersion}`);
+
+      if (data.deployment === "vercel") {
+        setDockerStatus("Vercel 部署会自动更新。");
+      } else if (!data.enabled) {
+        setDockerStatus("Docker 更新未启用。");
+      }
+    } catch {
+      setDockerStatus("Docker 更新状态读取失败。");
+    }
+  }
+
   async function requestDockerUpdate(action: "check" | "update") {
+    if (dockerDeployment === "vercel") {
+      setDockerStatus("Vercel 部署会自动更新。");
+      return null;
+    }
+
+    if (!dockerUpdateEnabled) {
+      setDockerStatus("Docker 更新未启用。");
+      return null;
+    }
+
     const token = dockerToken.trim();
 
     if (!token) {
@@ -177,6 +226,9 @@ export function SettingsPanel() {
     if (!response.ok || !data.ok) {
       throw new Error(data.ok === false ? data.error : "Docker 更新请求失败。");
     }
+
+    setDockerDeployment(data.deployment);
+    setDockerUpdateEnabled(data.enabled);
 
     setDockerVersion(
       data.latestVersion
@@ -253,6 +305,9 @@ export function SettingsPanel() {
       setIsUpdating(false);
     }
   }
+
+  const canUseDockerUpdater = dockerDeployment === "docker" && dockerUpdateEnabled && !isUpdating;
+  const dockerControlsDisabled = !canUseDockerUpdater;
 
   return (
     <div className="settings-wrap" ref={wrapRef}>
@@ -370,6 +425,7 @@ export function SettingsPanel() {
             <label className="settings-input">
               <input
                 autoComplete="off"
+                disabled={dockerControlsDisabled}
                 onChange={(event) => setDockerToken(event.target.value)}
                 placeholder="更新密钥"
                 type="password"
@@ -379,16 +435,21 @@ export function SettingsPanel() {
             <label className="settings-check">
               <input
                 checked={forceUpdate}
+                disabled={dockerControlsDisabled}
                 onChange={(event) => setForceUpdate(event.target.checked)}
                 type="checkbox"
               />
               <span>强制更新</span>
             </label>
             <div className="docker-update-actions">
-              <button disabled={isCheckingUpdate || isUpdating} onClick={checkDockerUpdate} type="button">
+              <button
+                disabled={dockerControlsDisabled || isCheckingUpdate || isUpdating}
+                onClick={checkDockerUpdate}
+                type="button"
+              >
                 {isCheckingUpdate ? "检测中" : "检测"}
               </button>
-              <button disabled={isUpdating} onClick={runDockerUpdate} type="button">
+              <button disabled={dockerControlsDisabled || isUpdating} onClick={runDockerUpdate} type="button">
                 {isUpdating ? "更新中" : "一键更新"}
               </button>
             </div>

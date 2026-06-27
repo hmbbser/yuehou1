@@ -15,6 +15,8 @@ type VersionInfo = {
   updateAvailable: boolean;
 };
 
+type DeploymentKind = "docker" | "vercel" | "other";
+
 const noStoreHeaders = {
   "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
 };
@@ -34,7 +36,19 @@ function jsonNoStore(body: unknown, init?: ResponseInit) {
 }
 
 function isEnabled() {
-  return process.env.YUEHOU_DOCKER_UPDATE_ENABLED === "true" && Boolean(process.env.YUEHOU_UPDATE_TOKEN);
+  return getDeploymentKind() === "docker" && Boolean(process.env.YUEHOU_UPDATE_TOKEN);
+}
+
+function getDeploymentKind(): DeploymentKind {
+  if (process.env.VERCEL) {
+    return "vercel";
+  }
+
+  if (process.env.YUEHOU_DOCKER_UPDATE_ENABLED === "true") {
+    return "docker";
+  }
+
+  return "other";
 }
 
 function hash(value: string) {
@@ -128,9 +142,22 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const action = body.action === "update" ? "update" : ("check" as UpdateAction);
+    const deployment = getDeploymentKind();
+
+    if (deployment === "vercel") {
+      return jsonNoStore(
+        {
+          ok: false,
+          deployment,
+          enabled: false,
+          error: "Vercel 部署会在 GitHub 更新后自动部署，不能在网页里执行 Docker 更新。",
+        },
+        { status: 403 },
+      );
+    }
 
     if (!isEnabled()) {
-      return jsonNoStore({ ok: false, enabled: false, error: "Docker 更新未启用。" }, { status: 403 });
+      return jsonNoStore({ ok: false, deployment, enabled: false, error: "Docker 更新未启用。" }, { status: 403 });
     }
 
     assertAuthorized(request, body);
@@ -138,22 +165,34 @@ export async function POST(request: Request) {
     const version = await getVersionInfo();
 
     if (action === "check") {
-      return jsonNoStore({ ok: true, enabled: true, ...version });
+      return jsonNoStore({ ok: true, deployment, enabled: true, ...version });
     }
 
     const force = body.force === true;
 
     if (!force && !version.updateAvailable) {
-      return jsonNoStore({ ok: true, enabled: true, started: false, ...version });
+      return jsonNoStore({ ok: true, deployment, enabled: true, started: false, ...version });
     }
 
     startUpdate(force);
 
-    return jsonNoStore({ ok: true, enabled: true, started: true, ...version });
+    return jsonNoStore({ ok: true, deployment, enabled: true, started: true, ...version });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Docker 更新失败。";
     const status = message.includes("密钥") ? 401 : 500;
 
-    return jsonNoStore({ ok: false, enabled: isEnabled(), error: message }, { status });
+    return jsonNoStore({ ok: false, deployment: getDeploymentKind(), enabled: isEnabled(), error: message }, { status });
   }
+}
+
+export async function GET() {
+  const deployment = getDeploymentKind();
+  const currentVersion = process.env.NEXT_PUBLIC_APP_VERSION || (await readPackageVersion());
+
+  return jsonNoStore({
+    ok: true,
+    currentVersion,
+    deployment,
+    enabled: isEnabled(),
+  });
 }

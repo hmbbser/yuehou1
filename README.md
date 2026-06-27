@@ -108,6 +108,8 @@ UPSTASH_REDIS_REST_TOKEN=...
 
 部署成功后就可以使用了。
 
+Vercel 部署会在 GitHub 仓库更新后自动重新部署。网页右上角设置里的 `Docker 更新` 只用于自有服务器 Docker 部署；在 Vercel 环境里会自动检测并禁用更新按钮。
+
 ## Debian / Ubuntu 服务器 Docker 部署
 
 下面适合把项目部署到自己的 Debian 或 Ubuntu 服务器，例如一台 VPS。  
