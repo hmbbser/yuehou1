@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { LogoMark } from "@/components/LogoMark";
 import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
@@ -240,6 +240,19 @@ function uploadChunk(
     request.onerror = () => reject(new Error("视频上传失败，请检查网络。"));
     request.send(blob);
   });
+}
+
+function getMediaFilesFromClipboard(data: DataTransfer) {
+  const itemFiles = Array.from(data.items)
+    .filter((item) => item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/")))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+
+  if (itemFiles.length > 0) {
+    return itemFiles;
+  }
+
+  return Array.from(data.files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
 }
 
 export default function HomePage() {
@@ -541,6 +554,15 @@ export default function HomePage() {
     await handleMediaFiles(Array.from(fileList ?? []));
   }
 
+  function handleSecretPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = getMediaFilesFromClipboard(event.clipboardData);
+
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    void handleMediaFiles(files);
+  }
+
   async function pasteClipboardMedia() {
     if (!navigator.clipboard?.read) {
       setStatus("当前浏览器不支持读取剪贴板文件。");
@@ -654,6 +676,7 @@ export default function HomePage() {
                 autoComplete="off"
                 autoFocus
                 onChange={(event) => setSecret(event.target.value)}
+                onPaste={handleSecretPaste}
                 placeholder={dailyQuote || "正在生成一言..."}
                 ref={secretRef}
                 value={secret}
