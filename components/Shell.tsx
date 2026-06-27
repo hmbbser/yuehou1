@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { appVersion } from "@/lib/site";
 import { SettingsPanel } from "./SettingsPanel";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -16,7 +17,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <a href="https://github.com/hmbbser/yuehou" target="_blank" rel="noreferrer">
           Yuehou
         </a>{" "}
-        v1.0.0
+        v{appVersion}
       </footer>
     </div>
   );

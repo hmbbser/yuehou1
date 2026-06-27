@@ -319,7 +319,7 @@ textarea {
   right: 0;
   z-index: 40;
   display: grid;
-  width: min(86vw, 320px);
+  width: min(88vw, 360px);
   gap: 14px;
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -415,6 +415,65 @@ textarea {
   width: 100%;
   accent-color: var(--text);
   cursor: pointer;
+}
+
+.settings-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--text);
+}
+
+.docker-update-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.docker-update-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.docker-update-actions button {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-solid);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  transition:
+    border-color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.docker-update-actions button:hover {
+  border-color: var(--text);
+  transform: translateY(-1px);
+}
+
+.docker-update-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
+.docker-update-panel small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .hero {

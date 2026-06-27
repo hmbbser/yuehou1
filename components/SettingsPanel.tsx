@@ -14,8 +14,20 @@ type SiteSettings = {
   quoteSource: QuoteSource;
 };
 
+type DockerUpdateResponse =
+  | {
+      ok: true;
+      currentVersion: string;
+      enabled: true;
+      latestVersion: string | null;
+      started?: boolean;
+      updateAvailable: boolean;
+    }
+  | { ok: false; enabled?: boolean; error: string };
+
 const settingsStorageKey = "yuehou-settings";
 const settingsChangeEvent = "yuehou-settings-change";
+const dockerUpdateTokenStorageKey = "yuehou-docker-update-token";
 
 const defaultSettings: SiteSettings = {
   backgroundApiUrl: "",
@@ -86,6 +98,12 @@ async function applyApiBackground() {
 export function SettingsPanel() {
   const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
   const [open, setOpen] = useState(false);
+  const [dockerToken, setDockerToken] = useState("");
+  const [dockerStatus, setDockerStatus] = useState("");
+  const [dockerVersion, setDockerVersion] = useState("");
+  const [forceUpdate, setForceUpdate] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,6 +115,8 @@ export function SettingsPanel() {
     if (initial.backgroundMode === "api") {
       void applyApiBackground();
     }
+
+    setDockerToken(localStorage.getItem(dockerUpdateTokenStorageKey) || "");
   }, []);
 
   useEffect(() => {
@@ -132,6 +152,106 @@ export function SettingsPanel() {
 
   function updatePageScale(value: string) {
     updateSettings({ ...settings, pageScale: Number(value) });
+  }
+
+  async function requestDockerUpdate(action: "check" | "update") {
+    const token = dockerToken.trim();
+
+    if (!token) {
+      setDockerStatus("请输入更新密钥。");
+      return null;
+    }
+
+    localStorage.setItem(dockerUpdateTokenStorageKey, token);
+
+    const response = await fetch("/api/docker-update", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action, force: forceUpdate }),
+    });
+    const data = (await response.json()) as DockerUpdateResponse;
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.ok === false ? data.error : "Docker 更新请求失败。");
+    }
+
+    setDockerVersion(
+      data.latestVersion
+        ? `当前 ${data.currentVersion} / 最新 ${data.latestVersion}`
+        : `当前 ${data.currentVersion}`,
+    );
+
+    return data;
+  }
+
+  async function checkDockerUpdate() {
+    setIsCheckingUpdate(true);
+    setDockerStatus("");
+
+    try {
+      const data = await requestDockerUpdate("check");
+
+      if (!data) return;
+
+      setDockerStatus(data.updateAvailable ? "发现新版本。" : "已经是最新版本。");
+    } catch (error) {
+      setDockerStatus(error instanceof Error ? error.message : "检测失败。");
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }
+
+  function pollDockerUpdate(expectedVersion: string | null) {
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+
+      requestDockerUpdate("check")
+        .then((data) => {
+          if (!data) return;
+          if ((expectedVersion && data.currentVersion === expectedVersion) || (!expectedVersion && attempts >= 6)) {
+            window.clearInterval(timer);
+            window.location.reload();
+          }
+        })
+        .catch(() => {
+          if (attempts >= 18) {
+            window.clearInterval(timer);
+            window.location.reload();
+          }
+        });
+
+      if (attempts >= 24) {
+        window.clearInterval(timer);
+        window.location.reload();
+      }
+    }, 5000);
+  }
+
+  async function runDockerUpdate() {
+    setIsUpdating(true);
+    setDockerStatus("");
+
+    try {
+      const data = await requestDockerUpdate("update");
+
+      if (!data) return;
+
+      if (data.started === false) {
+        setDockerStatus("已经是最新版本。");
+        setIsUpdating(false);
+        return;
+      }
+
+      setDockerStatus("更新已开始，完成后会刷新。");
+      pollDockerUpdate(forceUpdate ? null : data.latestVersion);
+    } catch (error) {
+      setDockerStatus(error instanceof Error ? error.message : "更新失败。");
+      setIsUpdating(false);
+    }
   }
 
   return (
@@ -244,6 +364,37 @@ export function SettingsPanel() {
               value={settings.pageScale}
             />
           </label>
+
+          <div className="settings-row docker-update-panel">
+            <span>Docker 更新</span>
+            <label className="settings-input">
+              <input
+                autoComplete="off"
+                onChange={(event) => setDockerToken(event.target.value)}
+                placeholder="更新密钥"
+                type="password"
+                value={dockerToken}
+              />
+            </label>
+            <label className="settings-check">
+              <input
+                checked={forceUpdate}
+                onChange={(event) => setForceUpdate(event.target.checked)}
+                type="checkbox"
+              />
+              <span>强制更新</span>
+            </label>
+            <div className="docker-update-actions">
+              <button disabled={isCheckingUpdate || isUpdating} onClick={checkDockerUpdate} type="button">
+                {isCheckingUpdate ? "检测中" : "检测"}
+              </button>
+              <button disabled={isUpdating} onClick={runDockerUpdate} type="button">
+                {isUpdating ? "更新中" : "一键更新"}
+              </button>
+            </div>
+            {dockerVersion ? <small>{dockerVersion}</small> : null}
+            {dockerStatus ? <small>{dockerStatus}</small> : null}
+          </div>
         </section>
     </div>
   );

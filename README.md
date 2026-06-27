@@ -169,6 +169,17 @@ chmod +x scripts/deploy-docker.sh
 
 脚本会先提示你输入网站名字。直接回车会使用默认的 `阅后即焚`，输入自定义名字后，全站标题、按钮文字和链接预览标题都会随之改变。
 
+脚本还会生成 `.env.docker`，里面包含：
+
+```bash
+NEXT_PUBLIC_APP_VERSION=当前版本号
+YUEHOU_DOCKER_UPDATE_ENABLED=true
+YUEHOU_HOST_PROJECT_DIR=/opt/yuehou
+YUEHOU_UPDATE_TOKEN=随机更新密钥
+```
+
+请保存脚本输出的 `Docker 更新密钥`。网页登录后打开右上角设置按钮，在 `Docker 更新` 里输入这个密钥，可以检测版本、执行更新，也可以勾选强制更新。更新完成后页面会自动刷新。
+
 查看状态和日志：
 
 ```bash
@@ -256,13 +267,33 @@ https://example.com
 
 ### 6. 更新部署
 
-以后更新代码：
+以后可以二选一更新。
+
+方法 A：网页一键更新
+
+1. 打开网站右上角设置。
+2. 在 `Docker 更新` 输入部署脚本输出的更新密钥。
+3. 点击 `检测`。
+4. 有新版本时点击 `更新`。需要重建当前版本时勾选 `强制更新`。
+5. 更新完成后页面会自动刷新。
+
+网页更新会在服务器上执行：
+
+```bash
+git fetch origin main
+git pull --ff-only origin main
+docker compose --env-file .env.docker up -d --build
+```
+
+方法 B：手动更新
 
 ```bash
 cd /opt/yuehou
 sudo git pull
 ./scripts/deploy-docker.sh
 ```
+
+一键更新依赖版本号判断：本地 `package.json` 的 `version` 和 GitHub `main` 分支的 `package.json` 版本不同，才会提示有新版本。每次发布新代码时请同步提升 `package.json` 里的版本号。
 
 ### 7. 常用维护命令
 
@@ -300,6 +331,7 @@ for v in $(sudo docker volume ls -q | grep 'yuehou-redis-data$'); do sudo docker
 - 读取接口使用 Redis 原子脚本完成校验、读取和删除。
 - 成功读取时，Redis key 会先删除，再把内容返回给浏览器。
 - API 响应使用 `Cache-Control: no-store`，避免 Vercel、CDN、浏览器缓存秘密内容。
+- Docker 一键更新会挂载 `/var/run/docker.sock`，只应在自有服务器使用，并务必保管好 `YUEHOU_UPDATE_TOKEN`。
 
 ## 仓库
 

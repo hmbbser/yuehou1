@@ -9,3 +9,4 @@ function cleanSiteName(value: string | undefined) {
 export const siteName = cleanSiteName(process.env.NEXT_PUBLIC_SITE_NAME);
 export const siteDescription = `4 位极短链接的无服务器${siteName}工具`;
 export const siteLogoText = Array.from(siteName).slice(-1)[0] ?? "焚";
+export const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || "1.0.1";
