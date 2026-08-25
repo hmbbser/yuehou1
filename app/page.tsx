@@ -274,6 +274,8 @@ export default function HomePage() {
   const [quoteSource, setQuoteSource] = useState<QuoteSource>(() => readSettings().quoteSource);
   const [settingsReady, setSettingsReady] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [quickCode, setQuickCode] = useState("");
+  const [quickAccessError, setQuickAccessError] = useState("");
   const secretRef = useRef<HTMLTextAreaElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const loadedQuoteSourceRef = useRef<QuoteSource | null>(null);
@@ -374,6 +376,18 @@ export default function HomePage() {
       textarea.selectionStart = start + 1;
       textarea.selectionEnd = start + 1;
     });
+  }
+
+  function visitQuickCode() {
+    const code = quickCode.trim().replace(/^\/+|\/+$/g, "");
+
+    if (!code || !/^[a-zA-Z0-9_-]+$/.test(code)) {
+      setQuickAccessError("请输入有效的访问后缀");
+      return;
+    }
+
+    setQuickAccessError("");
+    window.location.assign(`${window.location.origin}/${encodeURIComponent(code)}`);
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -665,13 +679,38 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            <label className="field">
-              <span className="field-head">
-                <span>秘密内容</span>
+            <div className="field">
+              <div className="field-head field-head--secret">
+                <span className="secret-field-title">秘密内容</span>
+                <div className="quick-access">
+                  <input
+                    aria-label="快速访问域名后缀"
+                    autoCapitalize="none"
+                    autoComplete="off"
+                    className="quick-access-input"
+                    onChange={(event) => {
+                      setQuickCode(event.target.value);
+                      if (quickAccessError) setQuickAccessError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        visitQuickCode();
+                      }
+                    }}
+                    placeholder="输入域名后缀，快速访问"
+                    spellCheck={false}
+                    value={quickCode}
+                  />
+                  <button className="quick-access-button" onClick={visitQuickCode} type="button">
+                    访问
+                  </button>
+                </div>
                 <button className="newline-button" onClick={insertNewLine} type="button">
                   换行
                 </button>
-              </span>
+              </div>
+              {quickAccessError ? <p className="quick-access-error">{quickAccessError}</p> : null}
               <textarea
                 autoComplete="off"
                 autoFocus
@@ -681,7 +720,7 @@ export default function HomePage() {
                 ref={secretRef}
                 value={secret}
               />
-            </label>
+            </div>
 
         <div className="photo-field">
           {photos.length > 0 || videos.length > 0 ? (
