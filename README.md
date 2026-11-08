@@ -12,13 +12,15 @@ https://your-domain.com/ve22
 
 ## 一键部署
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/hmbbser/yuehou&env=KV_REST_API_URL,KV_REST_API_TOKEN,NEXT_PUBLIC_SITE_NAME&envDescription=Create%20a%20Vercel%20KV%20or%20Upstash%20Redis%20database%20and%20paste%20the%20REST%20URL%20and%20token.%20NEXT_PUBLIC_SITE_NAME%20is%20optional%20and%20changes%20the%20global%20site%20name.&project-name=yuehou&repository-name=yuehou)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/hmbbser/yuehou1&env=KV_REST_API_URL,KV_REST_API_TOKEN,NEXT_PUBLIC_SITE_NAME&envDescription=Create%20a%20Vercel%20KV%20or%20Upstash%20Redis%20database%20and%20paste%20the%20REST%20URL%20and%20token.%20NEXT_PUBLIC_SITE_NAME%20is%20optional%20and%20changes%20the%20global%20site%20name.&project-name=yuehou&repository-name=yuehou)
 
 ## 功能
 
 - 4 位短链接，直接是根路径，例如 `/ve22`
 - 打开读取一次后立即销毁
 - 支持文字和多张照片一起阅后即焚
+- 照片和视频不限制数量，按存储容量检查并在超出时提示
+- 照片、视频使用列表显示，数量较多时可滚动，点击可放大或播放
 - 支持可选密码
 - 密码输错不会销毁内容
 - 支持 5 分钟、自定义分钟、无限期直到读取
@@ -39,6 +41,31 @@ https://your-domain.com/ve22
 6. 复制生成的短链接发给别人。
 7. 对方成功读取后，Redis 里的文字和照片会被删除，之后再打开就看不到了。
 
+## 1.0.5 更新
+
+- 取消最多 6 张照片和固定 2.6 MB 照片总大小限制，按整个内容的实际传输大小检查，包含密码加密后的开销。
+- 上传前显示内容占用和视频剩余空间；空间不足时停止上传并提示。视频初始化会预留完整文件所需空间，避免多个上传同时占满磁盘。
+- 批量上传中某个文件失败时保留成功文件，继续处理其余文件。移除、清空和上传失败时释放视频空间。
+- 创建页与读取页统一为媒体列表，超过 4 个文件时滚动显示，照片点击放大，视频点击播放。
+- Docker 视频存储改用命名卷，应用更新后仍可读取未过期的视频。Redis 默认上限 256 MB，容量满时拒绝写入并提示，不淘汰尚未读取的内容。
+
+### 存储容量配置
+
+Docker 可在 `.env.docker` 设置以下变量后重新构建：
+
+```bash
+MEDIA_STORAGE_MAX_BYTES=32212254720 # 视频存储上限，默认 30 GB
+MEDIA_STORAGE_RESERVE_BYTES=67108864 # 磁盘预留，默认 64 MB
+MAX_SECRET_REQUEST_BYTES=16777216 # 单条文字与照片请求容量，默认 16 MB
+REDIS_MAXMEMORY=256mb # Redis 总容量
+```
+
+实际可用视频空间取配置上限与磁盘剩余空间的较小值，并扣除正在上传的预留空间。照片仍在浏览器压缩，单张原图最大 8 MB；单个视频最大 30 GB。Vercel 的文字和照片请求上限为 4 MB，Upstash / Redis 达到套餐或内存上限时也会明确提示。自建 Nginx 需在 `location /` 中配置 `client_max_body_size 20m;`，允许分片上传和较大的照片内容请求。
+
+升级已有 Docker 部署时，如果要保留旧容器内尚未过期的视频，需先将旧 `/app/.yuehou-media` 目录迁移到新命名卷；之后的应用更新会自动保留卷中的视频。过期文件在下一次检查空间或上传时清理。
+
+视频采用本地文件存储，推荐 Docker 部署；Vercel 的临时目录不在函数实例间共享，不能保证视频在不同实例或重启后可用。此版本未加入外部对象存储。
+
 ## Vercel 部署步骤
 
 ### 1. 导入项目
@@ -46,7 +73,7 @@ https://your-domain.com/ve22
 打开 Vercel，选择 `Add New... -> Project`，导入这个仓库：
 
 ```text
-https://github.com/hmbbser/yuehou
+https://github.com/hmbbser/yuehou1
 ```
 
 也可以直接点击上面的一键部署按钮。
@@ -148,7 +175,7 @@ sudo docker compose version
 
 ```bash
 cd /opt
-sudo git clone https://github.com/hmbbser/yuehou.git
+sudo git clone https://github.com/hmbbser/yuehou1.git /opt/yuehou
 sudo chown -R $USER:$USER /opt/yuehou
 cd /opt/yuehou
 ```
@@ -226,6 +253,7 @@ server {
     server_name example.com;
 
     location / {
+        client_max_body_size 20m;
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -337,4 +365,4 @@ for v in $(sudo docker volume ls -q | grep 'yuehou-redis-data$'); do sudo docker
 
 ## 仓库
 
-[Yuehou on GitHub](https://github.com/hmbbser/yuehou)
+[Yuehou on GitHub](https://github.com/hmbbser/yuehou1)

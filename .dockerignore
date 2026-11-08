@@ -2,6 +2,7 @@
 .git
 .next
 node_modules
+.yuehou-media
 next-dev.err.log
 next-dev.out.log
 *.tsbuildinfo

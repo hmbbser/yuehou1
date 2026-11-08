@@ -7,9 +7,10 @@ type ImageLightboxProps = {
   alt: string;
   onClose: () => void;
   src: string;
+  video?: boolean;
 };
 
-export function ImageLightbox({ alt, onClose, src }: ImageLightboxProps) {
+export function ImageLightbox({ alt, onClose, src, video = false }: ImageLightboxProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function ImageLightbox({ alt, onClose, src }: ImageLightboxProps) {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="image-lightbox" onClick={onClose} role="presentation">
+    <div aria-label={alt} aria-modal="true" className="image-lightbox" onClick={onClose} role="dialog">
       <button
         aria-label="关闭预览"
         className="image-lightbox__close"
@@ -52,13 +53,15 @@ export function ImageLightbox({ alt, onClose, src }: ImageLightboxProps) {
       >
         ×
       </button>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {video ? <video aria-label={alt} autoPlay className="image-lightbox__image" controls onClick={(event) => event.stopPropagation()} playsInline src={src} /> : (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         alt={alt}
         className="image-lightbox__image"
         onClick={(event) => event.stopPropagation()}
         src={src}
       />
+      )}
     </div>,
     document.body,
   );

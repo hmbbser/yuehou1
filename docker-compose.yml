@@ -4,16 +4,20 @@ services:
       context: .
       args:
         NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-阅后即焚}
-        NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-1.0.4}
+        NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-1.0.5}
     container_name: yuehou
     depends_on:
       redis:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-1.0.4}
+      NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-1.0.5}
       NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-阅后即焚}
       REDIS_URL: redis://redis:6379
+      MEDIA_STORAGE_DIR: /app/.yuehou-media
+      MEDIA_STORAGE_MAX_BYTES: ${MEDIA_STORAGE_MAX_BYTES:-32212254720}
+      MEDIA_STORAGE_RESERVE_BYTES: ${MEDIA_STORAGE_RESERVE_BYTES:-67108864}
+      MAX_SECRET_REQUEST_BYTES: ${MAX_SECRET_REQUEST_BYTES:-16777216}
       YUEHOU_DOCKER_UPDATE_ENABLED: ${YUEHOU_DOCKER_UPDATE_ENABLED:-false}
       YUEHOU_HOST_PROJECT_DIR: ${YUEHOU_HOST_PROJECT_DIR:-/opt/yuehou}
       YUEHOU_UPDATE_TOKEN: ${YUEHOU_UPDATE_TOKEN:-}
@@ -22,6 +26,7 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
+      - yuehou-media:/app/.yuehou-media
       - /var/run/docker.sock:/var/run/docker.sock
       - ${YUEHOU_HOST_PROJECT_DIR:-.}:${YUEHOU_HOST_PROJECT_DIR:-/opt/yuehou}
     restart: unless-stopped
@@ -29,10 +34,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: yuehou-redis
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "${REDIS_MAXMEMORY:-256mb}", "--maxmemory-policy", "noeviction"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+
+volumes:
+  yuehou-media:

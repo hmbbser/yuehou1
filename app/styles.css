@@ -1214,6 +1214,17 @@ textarea {
   gap: 10px;
 }
 
+.media-collection { display: grid; gap: 8px; min-width: 0; }
+.media-summary, .storage-hint { color: var(--muted); font-size: 12px; margin: 0; line-height: 1.6; }
+.storage-hint--warning { color: #d97706; }
+.photo-list--scroll { max-height: min(40dvh, 350px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.media-file-name { min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
+.media-file-name strong, .media-file-name span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-file-name strong { color: var(--text); font-size: 13px; }
+.media-file-name span { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.media-file-name:focus-visible, .photo-thumb-button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.photo-preview:has(.media-file-name):not(:has(.icon-button)) { grid-template-columns: 58px minmax(0, 1fr); }
+
 .secret-image-button {
   display: block;
   overflow: hidden;

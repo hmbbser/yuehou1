@@ -14,7 +14,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
       <main className="main-stage">{children}</main>
       <footer className="footer">
-        <a href="https://github.com/hmbbser/yuehou" target="_blank" rel="noreferrer">
+        <a href="https://github.com/hmbbser/yuehou1" target="_blank" rel="noreferrer">
           Yuehou
         </a>{" "}
         v{appVersion}

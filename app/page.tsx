@@ -1,13 +1,14 @@
 "use client";
 
 import { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ImageLightbox } from "@/components/ImageLightbox";
+import { MediaList } from "@/components/MediaList";
 import { LogoMark } from "@/components/LogoMark";
 import { readSettings, settingsChangeEvent } from "@/components/SettingsPanel";
 import { Shell } from "@/components/Shell";
 import { encryptWithPassword } from "@/lib/client-crypto";
 import { packSecretContent, SecretImage, SecretVideo } from "@/lib/secret-content";
 import { siteName } from "@/lib/site";
+import { estimateSecretRequestBytes, formatFileSize, MediaStorage, UploadLimits } from "@/lib/upload-limits";
 
 type ExpiryValue = "300" | "custom" | "never";
 type QuoteSource = "default" | "hitokoto";
@@ -39,10 +40,7 @@ const expiryOptions: Array<{ label: string; value: ExpiryValue; hint: string }> 
 ];
 const maxOriginalImageBytes = 8 * 1024 * 1024;
 const maxStoredImageBytes = 700 * 1024;
-const maxStoredImagesBytes = 2.6 * 1024 * 1024;
-const maxPhotoCount = 6;
 const maxImageSide = 1280;
-const maxVideoBytes = 30 * 1024 * 1024 * 1024;
 
 const fallbackQuotes = [
   { text: "黑色世界唯有东方的曙光。", author: "佚名" },
@@ -123,7 +121,7 @@ function loadImage(src: string) {
     const image = new Image();
 
     image.onload = () => resolve(image);
-    image.onerror = reject;
+    image.onerror = () => reject(new Error("无法读取图片，文件可能损坏或格式不受支持。"));
     image.src = src;
   });
 }
@@ -194,18 +192,6 @@ async function prepareImage(file: File): Promise<SecretImage> {
   }
 }
 
-function formatFileSize(bytes: number) {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-  }
-
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  }
-
-  return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
-}
-
 function uploadChunk(
   url: string,
   blob: Blob,
@@ -268,7 +254,8 @@ export default function HomePage() {
   const [dailyQuote, setDailyQuote] = useState("");
   const [photos, setPhotos] = useState<SecretImage[]>([]);
   const [videos, setVideos] = useState<SecretVideo[]>([]);
-  const [previewPhoto, setPreviewPhoto] = useState<SecretImage | null>(null);
+  const [uploadLimits, setUploadLimits] = useState<UploadLimits | null>(null);
+  const [storage, setStorage] = useState<MediaStorage | null>(null);
   const [isPreparingPhoto, setIsPreparingPhoto] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [quoteSource, setQuoteSource] = useState<QuoteSource>(() => readSettings().quoteSource);
@@ -279,6 +266,7 @@ export default function HomePage() {
   const secretRef = useRef<HTMLTextAreaElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const loadedQuoteSourceRef = useRef<QuoteSource | null>(null);
+  const mediaBusyRef = useRef(false);
 
   const expiresIn = useMemo(() => {
     if (expiry === "never") return null;
@@ -292,7 +280,21 @@ export default function HomePage() {
     content: secret.trim().length > 0 || photos.length > 0 || videos.length > 0,
     password: password.trim().length > 0,
   };
-  const storedPhotosSize = photos.reduce((total, photo) => total + photo.size, 0);
+  const contentBytes = estimateSecretRequestBytes(packSecretContent({ images: photos, text: secret, videos }), password.trim().length > 0);
+  const contentTooLarge = Boolean(uploadLimits && contentBytes > uploadLimits.maxSecretRequestBytes);
+
+  async function refreshStorage() {
+    const response = await fetch("/api/media/uploads", { cache: "no-store" });
+    const data = await response.json() as (UploadLimits & { ok: true; storage: MediaStorage }) | { ok: false; error: string };
+    if (!response.ok || !data.ok) throw new Error(data.ok === false ? data.error : "无法检查存储空间。");
+    setUploadLimits(data);
+    setStorage(data.storage);
+    return data;
+  }
+
+  useEffect(() => {
+    void refreshStorage().catch((error: Error) => setStatus(error.message));
+  }, []);
 
   useEffect(() => {
     const focusSecret = () => secretRef.current?.focus({ preventScroll: true });
@@ -392,6 +394,7 @@ export default function HomePage() {
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mediaBusyRef.current || isLoading) return;
     setStatus("");
     setCopied(false);
 
@@ -408,11 +411,15 @@ export default function HomePage() {
     setIsLoading(true);
 
     try {
+      const limits = await refreshStorage();
       const content = packSecretContent({
         images: photos,
         text: secret,
         videos,
       });
+      if (estimateSecretRequestBytes(content, password.trim().length > 0) > limits.maxSecretRequestBytes) {
+        throw new Error(`内容超过当前存储容量（${formatFileSize(limits.maxSecretRequestBytes)}），请减少照片或文字后重试。`);
+      }
       const body =
         password.trim().length > 0
           ? {
@@ -426,11 +433,16 @@ export default function HomePage() {
               secret: content,
             };
 
+      const requestBody = JSON.stringify(body);
+      if (new TextEncoder().encode(requestBody).byteLength > limits.maxSecretRequestBytes) {
+        throw new Error("内容超过当前存储容量，请减少照片或文字后重试。");
+      }
       const response = await fetch("/api/secrets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: requestBody,
       });
+      if (response.status === 413) throw new Error("内容超过当前存储容量，请减少照片或文字后重试。");
       const data = (await response.json()) as CreateResponse;
 
       if (!response.ok || !data.ok) {
@@ -455,13 +467,16 @@ export default function HomePage() {
     }
   }
 
-  async function uploadVideo(file: File) {
+  async function uploadVideo(file: File, limits: UploadLimits & { storage: MediaStorage }) {
     if (!file.type.startsWith("video/")) {
       throw new Error("请选择视频文件。");
     }
 
-    if (file.size > maxVideoBytes) {
+    if (file.size > limits.maxVideoBytes) {
       throw new Error("视频最大不能超过 30 GB。");
+    }
+    if (file.size + 4096 > limits.storage.availableBytes) {
+      throw new Error(`存储空间不足，当前可用 ${formatFileSize(limits.storage.availableBytes)}，此视频需要 ${formatFileSize(file.size)}。`);
     }
 
     if (expiresIn === 0) {
@@ -484,40 +499,93 @@ export default function HomePage() {
       throw new Error(initData.ok === false ? initData.error : "视频上传失败。");
     }
 
-    let offset = 0;
+    try {
+      let offset = 0;
 
-    setUploadProgress({ fileName: file.name, loaded: 0, total: file.size });
+      setUploadProgress({ fileName: file.name, loaded: 0, total: file.size });
 
-    while (offset < file.size) {
-      const chunk = file.slice(offset, Math.min(offset + initData.chunkSize, file.size));
+      while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + initData.chunkSize, file.size));
 
-      await uploadChunk(
-        `/api/media/uploads/${initData.uploadId}/chunk`,
-        chunk,
-        initData.uploadToken,
-        offset,
-        (loaded) => setUploadProgress({ fileName: file.name, loaded, total: file.size }),
-      );
-      offset += chunk.size;
-      setUploadProgress({ fileName: file.name, loaded: offset, total: file.size });
+        await uploadChunk(
+          `/api/media/uploads/${initData.uploadId}/chunk`,
+          chunk,
+          initData.uploadToken,
+          offset,
+          (loaded) => setUploadProgress({ fileName: file.name, loaded, total: file.size }),
+        );
+        offset += chunk.size;
+        setUploadProgress({ fileName: file.name, loaded: offset, total: file.size });
+      }
+
+      const completeResponse = await fetch(`/api/media/uploads/${initData.uploadId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: initData.uploadToken }),
+      });
+      const completeData = (await completeResponse.json()) as { ok: true } | { ok: false; error: string };
+
+      if (!completeResponse.ok || !completeData.ok) {
+        throw new Error(completeData.ok === false ? completeData.error : "视频上传失败。");
+      }
+
+      return initData.media;
+    } catch (error) {
+      await releaseVideo(initData.media).catch(() => {});
+      throw error;
     }
+  }
 
-    const completeResponse = await fetch(`/api/media/uploads/${initData.uploadId}/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: initData.uploadToken }),
+  async function releaseVideo(video: SecretVideo) {
+    const response = await fetch(`/api/media/uploads/${video.id}`, {
+      method: "DELETE", headers: { "x-upload-token": video.token },
     });
-    const completeData = (await completeResponse.json()) as { ok: true } | { ok: false; error: string };
+    if (!response.ok) throw new Error("无法释放视频存储，请稍后重试。");
+  }
 
-    if (!completeResponse.ok || !completeData.ok) {
-      throw new Error(completeData.ok === false ? completeData.error : "视频上传失败。");
+  async function removeVideo(index: number) {
+    if (mediaBusyRef.current || isLoading) return;
+    mediaBusyRef.current = true;
+    setIsPreparingPhoto(true);
+    try {
+      await releaseVideo(videos[index]);
+      setVideos((value) => value.filter((_, itemIndex) => itemIndex !== index));
+      await refreshStorage();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "移除失败。");
+    } finally {
+      mediaBusyRef.current = false;
+      setIsPreparingPhoto(false);
     }
+  }
 
-    return initData.media;
+  async function clearContent() {
+    if (mediaBusyRef.current || isLoading) return;
+    mediaBusyRef.current = true;
+    setIsPreparingPhoto(true);
+    try {
+      const results = await Promise.allSettled(videos.map(releaseVideo));
+      const remaining = videos.filter((_, index) => results[index].status === "rejected");
+      setVideos(remaining);
+      setPhotos([]);
+      setSecret("");
+      setPassword("");
+      setResultUrl("");
+      setCopied(false);
+      setShowAutoCopyToast(false);
+      setStatus(remaining.length ? "部分视频未能释放空间，请重试移除。" : "");
+      await refreshStorage();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "清空失败。");
+    } finally {
+      mediaBusyRef.current = false;
+      setIsPreparingPhoto(false);
+    }
   }
 
   async function handleMediaFiles(files: File[]) {
-    if (files.length === 0) return;
+    if (files.length === 0 || mediaBusyRef.current || isLoading) return;
+    mediaBusyRef.current = true;
 
     setStatus("");
     setIsPreparingPhoto(true);
@@ -525,42 +593,49 @@ export default function HomePage() {
     try {
       const nextPhotos = [...photos];
       const nextVideos = [...videos];
-      let nextSize = storedPhotosSize;
+      const limits = await refreshStorage();
+      const failures: string[] = [];
 
       for (const file of files) {
-        if (file.type.startsWith("image/")) {
-          if (nextPhotos.length >= maxPhotoCount) {
-            throw new Error(`最多上传 ${maxPhotoCount} 张图片。`);
+        try {
+          if (file.type.startsWith("image/")) {
+            const nextPhoto = await prepareImage(file);
+
+            const nextContent = packSecretContent({ images: [...nextPhotos, nextPhoto], text: secret, videos: nextVideos });
+            if (estimateSecretRequestBytes(nextContent, password.trim().length > 0) > limits.maxSecretRequestBytes) {
+              throw new Error(`内容超过当前存储容量（${formatFileSize(limits.maxSecretRequestBytes)}），请减少照片或文字。`);
+            }
+
+            nextPhotos.push(nextPhoto);
+            setPhotos([...nextPhotos]);
+          } else if (file.type.startsWith("video/")) {
+            const nextContent = packSecretContent({ images: nextPhotos, text: secret, videos: [...nextVideos, { kind: "video", id: "0".repeat(32), token: "0".repeat(43), name: file.name, type: file.type, size: file.size }] });
+            if (estimateSecretRequestBytes(nextContent, password.trim().length > 0) > limits.maxSecretRequestBytes) throw new Error("内容超过当前存储容量，请减少照片或文字。");
+            const nextVideo = await uploadVideo(file, await refreshStorage());
+
+            nextVideos.push(nextVideo);
+            setVideos([...nextVideos]);
+          } else {
+            throw new Error("请选择照片或视频文件。");
           }
-
-          const nextPhoto = await prepareImage(file);
-
-          if (nextSize + nextPhoto.size > maxStoredImagesBytes) {
-            throw new Error("图片总大小太大，请移除几张或换更小的图片。");
-          }
-
-          nextPhotos.push(nextPhoto);
-          nextSize += nextPhoto.size;
-        } else if (file.type.startsWith("video/")) {
-          const nextVideo = await uploadVideo(file);
-
-          nextVideos.push(nextVideo);
-          setVideos([...nextVideos]);
-        } else {
-          throw new Error("请选择照片或视频文件。");
+        } catch (error) {
+          failures.push(`${file.name}：${error instanceof Error ? error.message : "媒体处理失败。"}`);
         }
       }
 
       setPhotos(nextPhotos);
       setVideos(nextVideos);
+      if (failures.length) setStatus(`${failures.length} 个文件未能上传；已成功的文件已保留。${failures.slice(0, 3).join(" ")}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "媒体处理失败，请换一个文件试试。");
     } finally {
+      mediaBusyRef.current = false;
       setIsPreparingPhoto(false);
       setUploadProgress(null);
       if (photoInputRef.current) {
         photoInputRef.current.value = "";
       }
+      void refreshStorage().catch(() => {});
     }
   }
 
@@ -635,7 +710,6 @@ export default function HomePage() {
     setPassword("");
     setPhotos([]);
     setVideos([]);
-    setPreviewPhoto(null);
     setResultUrl("");
     setStatus("");
     setCopied(false);
@@ -723,54 +797,18 @@ export default function HomePage() {
             </div>
 
         <div className="photo-field">
-          {photos.length > 0 || videos.length > 0 ? (
-            <div className="photo-list">
-              {photos.map((photo, index) => (
-                <div className="photo-preview" key={`${photo.name}-${photo.size}-${index}`}>
-                  <button
-                    aria-label="预览图片"
-                    className="photo-thumb-button"
-                    onClick={() => setPreviewPhoto(photo)}
-                    type="button"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt="已上传的阅后即焚图片" src={photo.dataUrl} />
-                  </button>
-                  <div>
-                    <strong>{photo.name || "已上传图片"}</strong>
-                    <span>{Math.ceil(photo.size / 1024)} KB</span>
-                  </div>
-                  <button
-                    className="icon-button"
-                    onClick={() => setPhotos((value) => value.filter((_, itemIndex) => itemIndex !== index))}
-                    type="button"
-                  >
-                    移除
-                  </button>
-                </div>
-              ))}
-              {videos.map((video, index) => (
-                <div className="photo-preview" key={`${video.id}-${index}`}>
-                  <div className="video-thumb" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="m9 8 7 4-7 4V8Z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <strong>{video.name || "已上传视频"}</strong>
-                    <span>{formatFileSize(video.size)}</span>
-                  </div>
-                  <button
-                    className="icon-button"
-                    onClick={() => setVideos((value) => value.filter((_, itemIndex) => itemIndex !== index))}
-                    type="button"
-                  >
-                    移除
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <MediaList
+            disabled={isPreparingPhoto || isLoading}
+            images={photos}
+            onRemoveImage={(index) => setPhotos((value) => value.filter((_, itemIndex) => itemIndex !== index))}
+            onRemoveVideo={(index) => void removeVideo(index)}
+            videos={videos}
+          />
+          <p className={contentTooLarge ? "storage-hint storage-hint--warning" : "storage-hint"} role="status">
+            数量不限。{uploadLimits ? `内容占用 ${formatFileSize(contentBytes)} / ${formatFileSize(uploadLimits.maxSecretRequestBytes)}` : "正在检查存储容量…"}
+            {storage ? `；视频可用空间 ${formatFileSize(storage.availableBytes)}` : ""}
+            {contentTooLarge ? "。已超出容量，请减少照片或文字。" : "。"}
+          </p>
 
           {uploadProgress ? (
             <div className="upload-progress" aria-label="上传进度">
@@ -789,7 +827,7 @@ export default function HomePage() {
             <input
               accept="image/*,video/*"
               className="photo-input"
-              disabled={isPreparingPhoto}
+              disabled={isPreparingPhoto || isLoading}
               multiple
               onChange={(event) => void handlePhotoChange(event.target.files)}
               ref={photoInputRef}
@@ -877,24 +915,13 @@ export default function HomePage() {
         {status ? <p className="status-text">{status}</p> : null}
 
         <div className="action-stack">
-          <button className="btn-pill btn-pill-primary" disabled={isLoading} type="submit">
+          <button className="btn-pill btn-pill-primary" disabled={isLoading || isPreparingPhoto || contentTooLarge} type="submit">
             {isLoading ? "生成中..." : `生成${siteName}链接`}
           </button>
           <button
             className="btn-pill btn-pill-secondary"
-            disabled={isLoading}
-            onClick={() => {
-              setSecret("");
-              setPassword("");
-              setPhotos([]);
-              setVideos([]);
-              setPreviewPhoto(null);
-              setResultUrl("");
-              setStatus("");
-              setCopied(false);
-              setUploadProgress(null);
-              setShowAutoCopyToast(false);
-            }}
+            disabled={isLoading || isPreparingPhoto}
+            onClick={() => void clearContent()}
             type="button"
           >
             清空
@@ -903,13 +930,6 @@ export default function HomePage() {
           </>
         )}
       </form>
-      {previewPhoto ? (
-        <ImageLightbox
-          alt={previewPhoto.name || "图片预览"}
-          onClose={() => setPreviewPhoto(null)}
-          src={previewPhoto.dataUrl}
-        />
-      ) : null}
     </Shell>
   );
 }

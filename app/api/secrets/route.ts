@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSecret } from "@/lib/secret-store";
 import { EncryptedPayload, SecretRecord } from "@/lib/types";
+import { getUploadLimits } from "@/lib/server-upload-limits";
+import { isStorageFullError } from "@/lib/storage-errors";
+import { formatFileSize } from "@/lib/upload-limits";
 
 export const runtime = "nodejs";
 
@@ -46,6 +49,8 @@ function normalizeExpiresIn(value: unknown) {
 function getCreateErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "创建失败。";
 
+  if (isStorageFullError(error)) return "存储容量不足，无法保存内容。请减少照片或文字，或等待已有内容销毁后重试。";
+
   if (message.includes("NOPERM") || message.includes("no permissions")) {
     return "Redis Token 没有写入权限。请在 Upstash 复制 REST API 的读写 Token，并更新 Vercel 环境变量后重新部署。";
   }
@@ -59,7 +64,25 @@ function getCreateErrorMessage(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    const { maxSecretRequestBytes } = getUploadLimits();
+    const tooLarge = () => jsonNoStore({ ok: false, error: `内容超过当前存储容量（${formatFileSize(maxSecretRequestBytes)}），请减少照片或文字后重试。` }, { status: 413 });
+    if (Number(request.headers.get("content-length")) > maxSecretRequestBytes) return tooLarge();
+    const reader = request.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        byteLength += value.byteLength;
+        if (byteLength > maxSecretRequestBytes) {
+          await reader.cancel();
+          return tooLarge();
+        }
+        chunks.push(value);
+      }
+    }
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
     const mode = body.mode;
     const expiresIn = normalizeExpiresIn(body.expiresIn);
 
@@ -111,7 +134,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : "";
-    const status =
+    const status = isStorageFullError(error) ? 507 :
       rawMessage.includes("NOPERM") ||
       rawMessage.includes("no permissions") ||
       rawMessage.includes("Redis") ||

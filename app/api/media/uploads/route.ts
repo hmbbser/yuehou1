@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { createMediaUpload, maxVideoBytes } from "@/lib/media-store";
+import { createMediaUpload, getMediaStorage } from "@/lib/media-store";
+import { getUploadLimits } from "@/lib/server-upload-limits";
+import { isStorageFullError, StorageFullError } from "@/lib/storage-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,12 +63,16 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return jsonNoStore(
-      { ok: false, error: error instanceof Error ? error.message : "视频上传初始化失败。" },
-      { status: 400 },
+      { ok: false, error: isStorageFullError(error) && !(error instanceof StorageFullError) ? "存储空间不足，请释放空间后重试。" : error instanceof Error ? error.message : "视频上传初始化失败。" },
+      { status: isStorageFullError(error) ? 507 : 400 },
     );
   }
 }
 
 export async function GET() {
-  return jsonNoStore({ ok: true, maxVideoBytes });
+  try {
+    return jsonNoStore({ ok: true, ...getUploadLimits(), storage: await getMediaStorage() });
+  } catch {
+    return jsonNoStore({ ok: false, error: "无法检查存储空间，请稍后重试。" }, { status: 503 });
+  }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ImageLightbox } from "@/components/ImageLightbox";
+import { MediaList } from "@/components/MediaList";
 import { decryptWithPassword, derivePasswordProof } from "@/lib/client-crypto";
 import { SecretContent, unpackSecretContent } from "@/lib/secret-content";
 import { siteName } from "@/lib/site";
@@ -17,7 +17,6 @@ type ConsumeResponse =
 export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
   const [password, setPassword] = useState("");
   const [secret, setSecret] = useState<SecretContent>({ images: [], text: "", videos: [] });
-  const [previewImage, setPreviewImage] = useState<SecretContent["images"][number] | null>(null);
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [destroyed, setDestroyed] = useState(false);
@@ -144,36 +143,7 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
 
       {secret.text || secret.images.length > 0 || secret.videos.length > 0 ? (
         <div className="secret-output">
-          {secret.images.length > 0 ? (
-            <div className="secret-image-grid">
-              {secret.images.map((image, index) => (
-                <button
-                  aria-label="预览图片"
-                  className="secret-image-button"
-                  key={`${image.name}-${image.size}-${index}`}
-                  onClick={() => setPreviewImage(image)}
-                  type="button"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt="阅后即焚图片" className="secret-output-image" src={image.dataUrl} />
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {secret.videos.length > 0 ? (
-            <div className="secret-video-list">
-              {secret.videos.map((video) => (
-                <video
-                  className="secret-output-video"
-                  controls
-                  key={video.id}
-                  playsInline
-                  preload="metadata"
-                  src={`/api/media/${video.id}?token=${encodeURIComponent(video.token)}`}
-                />
-              ))}
-            </div>
-          ) : null}
+          <MediaList images={secret.images} videos={secret.videos} />
           {secret.text ? (
             <>
               <label className="field">
@@ -213,13 +183,6 @@ export function SecretReader({ meta }: { meta: PublicSecretMeta }) {
           </a>
         </div>
       )}
-      {previewImage ? (
-        <ImageLightbox
-          alt={previewImage.name || "图片预览"}
-          onClose={() => setPreviewImage(null)}
-          src={previewImage.dataUrl}
-        />
-      ) : null}
     </form>
   );
 }

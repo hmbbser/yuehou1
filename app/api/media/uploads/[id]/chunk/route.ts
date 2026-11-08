@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { appendMediaChunk } from "@/lib/media-store";
+import { isStorageFullError } from "@/lib/storage-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,8 +37,8 @@ export async function PUT(request: Request, { params }: Params) {
     return jsonNoStore({ ok: true, uploaded: manifest.uploaded });
   } catch (error) {
     return jsonNoStore(
-      { ok: false, error: error instanceof Error ? error.message : "视频分片上传失败。" },
-      { status: 400 },
+      { ok: false, error: isStorageFullError(error) ? "存储空间不足，上传已停止，请释放空间后重试。" : error instanceof Error ? error.message : "视频分片上传失败。" },
+      { status: isStorageFullError(error) ? 507 : 400 },
     );
   }
 }
